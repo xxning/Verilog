@@ -1,0 +1,169 @@
+/* word length */
+`define ADDR_RANGE 31 : 0
+`define INST_RANGE 31 : 0
+`define WORD_RANGE 31 : 0
+`define DOUBLE_WORD_RANGE 63 : 0
+`define PC_ADD 4
+`define PC_DOUBLE_ADD 8
+`define PC_END 400
+`define OVERFLOW_TEST_RANGE 32 : 0
+
+/* register files */
+`define REG_RANGE 4 : 0
+`define REG_NUM 32
+`define REG_RD 31
+
+/* show module */
+`define SHOW_REG_ADDR_RANGE 5 : 0 
+
+/* instruction */
+`define OPTICODE_RANGE 5 : 0
+`define OPTICODE_POS 31 : 26
+`define OPTICODE_ORI 6'b001101
+`define OPTICODE_SPECIAL 6'b000000
+`define OPTICODE_SPECIAL2 6'b011100
+`define OPTICODE_PREF 6'b110011
+`define OPTICODE_ANDI 6'b001100
+`define OPTICODE_XORI 6'b001110
+`define OPTICODE_LUI 6'b001111
+`define OPTICODE_ADDI 6'b001000
+`define OPTICODE_ADDIU 6'b001001
+`define OPTICODE_SLTI 6'b001010
+`define OPTICODE_SLTIU 6'b001011
+`define OPTICODE_J 6'b000010
+`define OPTICODE_JAL 6'b000011
+`define OPTICODE_BEQ 6'b000100
+`define OPTICODE_BGTZ 6'b000111
+`define OPTICODE_BLEZ 6'b000110
+`define OPTICODE_BNE 6'b000101
+`define OPTICODE_REGIMM 6'b000001
+`define OPTICODE_LB 6'b100000
+`define OPTICODE_LBU 6'b100100
+`define OPTICODE_LH 6'b100001
+`define OPTICODE_LHU 6'b100101
+`define OPTICODE_LW 6'b100011
+`define OPTICODE_SB 6'b101000
+`define OPTICODE_SH 6'b101001
+`define OPTICODE_SW 6'b101011
+`define OPTICODE_LWL 6'b100010
+`define OPTICODE_LWR 6'b100110
+`define OPTICODE_SWL 6'b101010
+`define OPTICODE_SWR 6'b101110
+
+`define REGIMM_FUNC_RANGE 4 : 0
+`define REGIMM_FUNC_POS 20 : 16
+`define REGIMM_FUNC_BLTZ 5'b00000
+`define REGIMM_FUNC_BLTZAL 5'b10000
+`define REGIMM_FUNC_BGEZ 5'b00001
+`define REGIMM_FUNC_BGEZAL 5'b10001
+
+`define FUNC_RANGE 5 : 0
+`define FUNC_POS 5 : 0
+`define FUNC_AND 6'b100100
+`define FUNC_OR 6'b100101
+`define FUNC_XOR 6'b100110
+`define FUNC_NOR 6'b100111
+`define FUNC_SLLV 6'b000100
+`define FUNC_SRLV 6'b000110
+`define FUNC_SRAV 6'b000111
+`define FUNC_SLL 6'b000000
+`define FUNC_SRL 6'b000010
+`define FUNC_SRA 6'b000011
+`define FUNC_MOVN 6'b001011
+`define FUNC_MOVZ 6'b001010
+`define FUNC_MFHI 6'b010000
+`define FUNC_MFLO 6'b010010
+`define FUNC_MTHI 6'b010001
+`define FUNC_MTLO 6'b010011
+`define FUNC_ADD 6'b100000
+`define FUNC_ADDU 6'b100001
+`define FUNC_SUB 6'b100010
+`define FUNC_SUBU 6'b100011
+`define FUNC_SLT 6'b101010
+`define FUNC_SLTU 6'b101011
+`define FUNC_CLZ 6'b100000
+`define FUNC_CLO 6'b100001
+`define FUNC_MADD 6'b000000
+`define FUNC_MADDU 6'b000001
+`define FUNC_MSUB 6'b000100
+`define FUNC_MSUBU 6'b000101
+`define FUNC_MUL 6'b000010
+`define FUNC_MULT 6'b011000
+`define FUNC_MULTU 6'b011001
+`define FUNC_JR 6'b001000
+`define FUNC_JALR 6'b001001
+
+`define TEN_SIX_POS 10 : 6
+`define TEN_SIX_RANGE 4 : 0
+`define TWENTY_SIXTEEN_RANGE 4 : 0
+`define TWENTY_SIXTEEN_POS 20 : 16
+`define TWENTYFIVE_TWENTYONE_POS 25 : 21
+`define TWENTYFIVE_TWENTYONE_RANGE 4 : 0
+`define FIFTEEN_ELEVEN_POS 15 : 11
+`define FIFTEEN_ELEVEN_RANGE 4 : 0
+
+`define INST_IMM_POS 15 : 0
+`define INST_REG_1 25 : 21
+`define INST_REG_2 20 : 16
+`define INST_REG_3 15 : 11
+`define INST_SIGN_POS 15
+`define INST_J 25 : 0
+`define INST_OFFSET 15 : 0 
+`define INST_OFFSET_SIGN 15
+
+/* alu */
+`define ALU_OP_RANGE 5 : 0
+`define ALU_OP_OR 6'b000001
+`define ALU_OP_AND 6'b000010
+`define ALU_OP_SLL 6'b000011
+`define ALU_OP_SRL 6'b000100
+`define ALU_OP_SRA 6'b000101
+`define ALU_OP_LUI 6'b000110
+`define ALU_OP_XOR 6'b000111
+`define ALU_OP_NOR 6'b001000
+`define ALU_OP_MOV 6'b001001
+`define ALU_OP_MF 6'b001010
+`define ALU_OP_MTHI 6'b001011
+`define ALU_OP_MTLO 6'b001100
+`define ALU_OP_ADD 6'b001101
+`define ALU_OP_ADDU 6'b001110
+`define ALU_OP_SUB 6'b001111
+`define ALU_OP_SUBU 6'b010000
+`define ALU_OP_SLT 6'b010001
+`define ALU_OP_SLTU 6'b010010
+`define ALU_OP_CLZ 6'b010011
+`define ALU_OP_CLO 6'b010100
+`define ALU_OP_MUL 6'b010101
+`define ALU_OP_MULT 6'b010110
+`define ALU_OP_MULTU 6'b010111
+`define ALU_OP_RD 6'b011000
+`define ALU_OP_LB 6'b011001
+`define ALU_OP_LBU 6'b011010
+`define ALU_OP_LH 6'b011011
+`define ALU_OP_LHU 6'b011100
+`define ALU_OP_LW 6'b011101
+`define ALU_OP_SB 6'b011110
+`define ALU_OP_SH 6'b011111
+`define ALU_OP_SW 6'b100000
+`define ALU_OP_LWL 6'b100001
+`define ALU_OP_LWR 6'b100010
+`define ALU_OP_SWL 6'b100011
+`define ALU_OP_SWR 6'b100100
+`define ALU_OP_MADD 6'B100101
+`define ALU_OP_MADDU 6'B100110
+`define ALU_OP_MSUB 6'B100111
+`define ALU_OP_MSUBU 6'B101000
+
+/* ip core rom */
+`define IP_CORE_ROM_RANGE 6 : 0
+`define IP_CORE_ROM_POS 8 : 2
+`define IP_CORE_RAM_ADDR_RANGE 6 : 0
+`define IP_CORE_RAM_DATA_RANGE 7 : 0
+`define IP_CORE_RAM_ACTUAL_ADDR_RANGE 31 : 2
+`define IP_CORE_RAM_SEL_RANGE 3 : 0
+
+/* key utils */
+`define KEY_LIMIT 100000
+
+/* led relatives */
+`define LED_RANGE 7 : 0

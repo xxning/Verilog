@@ -1,0 +1,79 @@
+`timescale 1ns / 1ps
+//////////////////////////////////////////////////////////////////////////////////
+// Company: 
+// Engineer: 
+// 
+// Create Date:    22:22:10 04/30/2015 
+// Design Name: 
+// Module Name:    execute_mem 
+// Project Name: 
+// Target Devices: 
+// Tool versions: 
+// Description: 
+//
+// Dependencies: 
+//
+// Revision: 
+// Revision 0.01 - File Created
+// Additional Comments: 
+//
+//////////////////////////////////////////////////////////////////////////////////
+
+`include "defs.v"
+
+module execute_mem(
+	input								clk,
+	input								rst,
+   input[`WORD_RANGE]			execute_storeValue,
+	input[`ALU_OP_RANGE]			execute_alu_op,
+	input[`ADDR_RANGE]			execute_mem_addr,
+	input								execute_reg_write_en,
+	input[`REG_RANGE]				execute_reg_write_addr,
+	input[`WORD_RANGE]			execute_reg_write_data,
+	input								execute_hi_write_en_out,
+	input								execute_lo_write_en_out,
+	input[`WORD_RANGE]			execute_hi_write_data_out,
+	input[`WORD_RANGE]			execute_lo_write_data_out,
+	output reg[`WORD_RANGE]		mem_storeValue,
+	output reg[`ALU_OP_RANGE]	mem_alu_op,
+	output reg[`ADDR_RANGE]		mem_mem_addr,
+	output reg						mem_reg_write_en,
+	output reg[`REG_RANGE]		mem_reg_write_addr,
+	output reg[`WORD_RANGE]		mem_reg_write_data,
+	output reg						mem_hi_write_en_out,
+	output reg						mem_lo_write_en_out,
+	output reg[`WORD_RANGE]		mem_hi_write_data_out,
+	output reg[`WORD_RANGE]		mem_lo_write_data_out
+);
+
+always @(posedge clk)
+begin
+	if (rst)
+	begin
+		mem_reg_write_en <= 0;
+		mem_reg_write_addr <= 0;
+		mem_reg_write_data <= 0;
+		mem_hi_write_en_out <= 0;
+		mem_lo_write_en_out <= 0;
+		mem_hi_write_data_out <= 0;
+		mem_lo_write_data_out <= 0;
+		mem_storeValue <= 0; 
+		mem_alu_op <= 0;
+		mem_mem_addr <= 0; 
+	end
+	else
+	begin
+		mem_reg_write_en <= execute_reg_write_en; 
+		mem_reg_write_addr <= execute_reg_write_addr;
+		mem_reg_write_data <= execute_reg_write_data;		
+		mem_hi_write_en_out <= execute_hi_write_en_out;
+		mem_lo_write_en_out <= execute_lo_write_en_out;
+		mem_hi_write_data_out <= execute_hi_write_data_out;
+		mem_lo_write_data_out <= execute_lo_write_data_out;	
+		mem_storeValue <= execute_storeValue; 
+		mem_alu_op <= execute_alu_op;
+		mem_mem_addr <= execute_mem_addr; 
+	end
+end
+
+endmodule

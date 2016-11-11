@@ -1,0 +1,67 @@
+`timescale 1ns / 1ps
+//////////////////////////////////////////////////////////////////////////////////
+// Company: 
+// Engineer: 
+// 
+// Create Date:    22:33:49 04/30/2015 
+// Design Name: 
+// Module Name:    mem_wb 
+// Project Name: 
+// Target Devices: 
+// Tool versions: 
+// Description: 
+//
+// Dependencies: 
+//
+// Revision: 
+// Revision 0.01 - File Created
+// Additional Comments: 
+//
+//////////////////////////////////////////////////////////////////////////////////
+
+`include "defs.v"
+
+module mem_writeBack(
+	input								clk,
+	input								rst,
+	input						   	mem_reg_write_en,
+	input[`REG_RANGE]		   	mem_reg_write_addr,
+	input[`WORD_RANGE]			mem_reg_write_data,
+	input								mem_hi_write_en,
+	input								mem_lo_write_en,
+	input[`WORD_RANGE]			mem_hi_write_data,
+	input[`WORD_RANGE]			mem_lo_write_data,
+	output reg						writeBack_write_en,
+	output reg[`REG_RANGE]		writeBack_write_addr,
+	output reg[`WORD_RANGE]		writeBack_write_data,
+	output reg						writeBack_hi_write_en,
+	output reg						writeBack_lo_write_en,
+	output reg[`WORD_RANGE]		writeBack_hi_write_data,
+	output reg[`WORD_RANGE]		writeBack_lo_write_data
+);
+
+always @(posedge clk)
+begin
+	if (rst)
+	begin
+		writeBack_write_en <= 0;
+		writeBack_write_addr <= 0;
+		writeBack_write_data <= 0;
+		writeBack_hi_write_en <= 0;
+		writeBack_lo_write_en <= 0;
+		writeBack_hi_write_data <= 0;
+		writeBack_lo_write_data <= 0;
+	end
+	else
+	begin
+		writeBack_write_en <= mem_reg_write_en;
+		writeBack_write_addr <= mem_reg_write_addr;
+		writeBack_write_data <= mem_reg_write_data;
+		writeBack_hi_write_en <= mem_hi_write_en;
+		writeBack_lo_write_en <= mem_lo_write_en;
+		writeBack_hi_write_data <= mem_hi_write_data;
+		writeBack_lo_write_data <= mem_lo_write_data;
+	end
+end
+
+endmodule

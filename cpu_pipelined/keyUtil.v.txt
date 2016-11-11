@@ -1,0 +1,55 @@
+`timescale 1ns / 1ps
+//////////////////////////////////////////////////////////////////////////////////
+// Company: 
+// Engineer: 
+// 
+// Create Date:    17:28:41 05/05/2015 
+// Design Name: 
+// Module Name:    keyUtil 
+// Project Name: 
+// Target Devices: 
+// Tool versions: 
+// Description: 
+//
+// Dependencies: 
+//
+// Revision: 
+// Revision 0.01 - File Created
+// Additional Comments: 
+//
+//////////////////////////////////////////////////////////////////////////////////
+`include "defs.v"
+
+module keyUtil(
+	input 			clk,
+	input 			inSig,
+	output reg		outSig
+);
+
+initial 
+begin
+	outSig = 0;
+end
+
+reg					lastSig = 0;
+integer 				count = 0;
+
+always @(posedge clk)
+begin
+	if (inSig == lastSig)
+		begin
+			count = count + 1;
+			if (count > `KEY_LIMIT)
+				begin
+					count = 0;
+					outSig = inSig;
+				end
+		end
+	else
+		begin
+			count = 0;
+			lastSig = inSig;
+		end
+end
+
+endmodule

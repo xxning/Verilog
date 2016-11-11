@@ -1,0 +1,145 @@
+`timescale 1ns / 1ps
+//////////////////////////////////////////////////////////////////////////////////
+// Company: 
+// Engineer: 
+// 
+// Create Date:    22:42:48 04/30/2015 
+// Design Name: 
+// Module Name:    cpu 
+// Project Name: 
+// Target Devices: 
+// Tool versions: 
+// Description: 
+//
+// Dependencies: 
+//
+// Revision: 
+// Revision 0.01 - File Created
+// Additional Comments: 
+//
+//////////////////////////////////////////////////////////////////////////////////
+
+`include "defs.v"
+
+module cpu(
+	input							clk,
+	input							rst,
+	input[`WORD_RANGE]		rom_data,
+	output[`ADDR_RANGE]		rom_addr, 
+	output						rom_en
+);
+
+wire[`WORD_RANGE]				inst; 
+wire[`WORD_RANGE]				reg_read1_data;
+wire[`WORD_RANGE]				reg_read2_data;
+wire								reg_read1_en;
+wire								reg_read2_en;
+wire[`ADDR_RANGE]				reg_read1_addr;
+wire[`ADDR_RANGE]				reg_read2_addr;
+wire								reg_write_en;
+wire[`ADDR_RANGE]				reg_write_addr; 
+		
+pcReg pcReg (
+    .clk(clk), 
+    .rst(rst), 
+    .pc(pc), 
+    .rom_en(rom_en)
+);
+
+fetch_decode fetch_decode (
+    .rst(rst), 
+    .clk(clk), 
+    .fetch_inst(rom_data), 
+    .decode_inst(inst)
+);
+
+decode decode (
+    .rst(rst), 
+    .inst(inst), 
+    .reg_read1_data(reg_read1_data), 
+    .reg_read2_data(reg_read2_data), 
+    .reg_read1_en(reg_read1_en), 
+    .reg_read2_en(reg_read2_en), 
+    .reg_read1_addr(reg_read1_addr), 
+    .reg_read2_addr(reg_read2_addr), 
+    .reg_write_en(reg_write_en), 
+    .reg_write_addr(reg_write_addr), 
+    .operand1(operand1), 
+    .operand2(operand2), 
+    .alu_op(alu_op)
+);
+
+regFiles regFiles (
+    .clk(clk), 
+    .rst(rst), 
+    .we(we), 
+    .re1(re1), 
+    .re2(re2), 
+    .raddr1(raddr1), 
+    .raddr2(raddr2), 
+    .waddr(waddr), 
+    .wdata(wdata), 
+    .rdata1(rdata1), 
+    .rdata2(rdata2)
+);
+
+decode_execute decode_execute (
+    .clk(clk), 
+    .rst(rst), 
+    .decode_reg_write_en(decode_reg_write_en), 
+    .decode_reg_write_addr(decode_reg_write_addr), 
+    .decode_operand1(decode_operand1), 
+    .decode_operand2(decode_operand2), 
+    .decode_alu_op(decode_alu_op), 
+    .execute_reg_write_en(execute_reg_write_en), 
+    .execute_reg_write_addr(execute_reg_write_addr), 
+    .execute_operand1(execute_operand1), 
+    .execute_operand2(execute_operand2), 
+    .execute_alu_op(execute_alu_op)
+);
+
+execute execute (
+    .rst(rst), 
+    .alu_op(alu_op), 
+    .operand1(operand1), 
+    .operand2(operand2), 
+    .reg_write_en_in(reg_write_en_in), 
+    .reg_write_addr_in(reg_write_addr_in), 
+    .reg_write_en_out(reg_write_en_out), 
+    .reg_write_addr_out(reg_write_addr_out), 
+    .reg_write_data_out(reg_write_data_out)
+);
+
+execute_mem execute_mem (
+    .clk(clk), 
+    .rst(rst), 
+    .execute_reg_write_en(execute_reg_write_en), 
+    .execute_reg_write_addr(execute_reg_write_addr), 
+    .execute_reg_write_data(execute_reg_write_data), 
+    .mem_reg_write_en(mem_reg_write_en), 
+    .mem_reg_write_addr(mem_reg_write_addr), 
+    .mem_reg_write_data(mem_reg_write_data)
+);
+
+mem mem (
+    .rst(rst), 
+    .reg_write_en_in(reg_write_en_in), 
+    .reg_write_addr_in(reg_write_addr_in), 
+    .reg_write_data_in(reg_write_data_in), 
+    .reg_write_en_out(reg_write_en_out), 
+    .reg_write_addr_out(reg_write_addr_out), 
+    .reg_write_data_out(reg_write_data_out)
+);
+
+mem_writeBack mem_writeBack (
+    .clk(clk), 
+    .rst(rst), 
+    .mem_reg_write_en(mem_reg_write_en), 
+    .mem_reg_write_addr(mem_reg_write_addr), 
+    .mem_reg_write_data(mem_reg_write_data), 
+    .writeBack_write_en(writeBack_write_en), 
+    .writeBack_write_addr(writeBack_write_addr), 
+    .writeBack_write_data(writeBack_write_data)
+);
+
+endmodule

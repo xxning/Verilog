@@ -1,0 +1,72 @@
+`timescale 1ns / 1ps
+//////////////////////////////////////////////////////////////////////////////////
+// Company: 
+// Engineer: 
+// 
+// Create Date:    20:15:14 04/30/2015 
+// Design Name: 
+// Module Name:    pcReg 
+// Project Name: 
+// Target Devices: 
+// Tool versions: 
+// Description: 
+//
+// Dependencies: 
+//
+// Revision: 
+// Revision 0.01 - File Created
+// Additional Comments: 
+//
+//////////////////////////////////////////////////////////////////////////////////
+
+`include "defs.v"
+
+module pcReg(
+	input 						clk,
+	input					 		rst,
+	input							pcSet_en,
+	input[`ADDR_RANGE]		pcSetValue,
+	input							stall, 
+	output reg[`ADDR_RANGE]	pc,
+	output reg					rom_en,
+	output						finish
+);			
+
+assign							finish = (pc == `PC_END); 
+
+initial 
+begin
+	pc = 0;
+	rom_en = 0;
+end
+
+always @(posedge clk)
+begin
+	if (rst)
+	begin
+		rom_en <= 0;
+		pc <= 0;
+	end 
+	else if (stall)      // stall 
+	begin
+		rom_en <= 0;
+		pc <= pc - `PC_ADD; 
+	end
+	else if (pcSet_en && pcSetValue <= `PC_END)
+	begin
+		rom_en <= 1;
+		pc <= pcSetValue; 
+	end	
+	else if (!finish)
+	begin
+		rom_en <= 1;
+		pc <= pc + `PC_ADD; 
+	end
+	else
+	begin
+		rom_en <= 0;
+		pc <= pc; 
+	end
+end	
+
+endmodule

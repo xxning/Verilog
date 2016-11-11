@@ -1,0 +1,141 @@
+`timescale 1ns / 1ps
+//////////////////////////////////////////////////////////////////////////////////
+// Company: 
+// Engineer: 
+// 
+// Create Date:    20:40:41 04/30/2015 
+// Design Name: 
+// Module Name:    regFiles 
+// Project Name: 
+// Target Devices: 
+// Tool versions: 
+// Description: 
+//
+// Dependencies: 
+//
+// Revision: 
+// Revision 0.01 - File Created
+// Additional Comments: 
+//
+//////////////////////////////////////////////////////////////////////////////////
+
+`include "defs.v"
+
+module regFiles(
+	input								clk,
+	input								rst,
+	input								we,
+	input								re1,
+	input								re2,
+	input[`REG_RANGE]				raddr1,
+	input[`REG_RANGE]				raddr2,
+	input[`REG_RANGE]				waddr,
+	input[`WORD_RANGE]			wdata, 
+	input								wehi,
+	input								welo,
+	input[`WORD_RANGE]			whidata,
+	input[`WORD_RANGE]			wlodata,
+	input								rehi,
+	input								relo,
+	input[5 : 0]					regAddr, 
+	output reg[`WORD_RANGE]		rhidata,
+	output reg[`WORD_RANGE]		rlodata, 
+	output reg[`WORD_RANGE]		rdata1,
+	output reg[`WORD_RANGE]		rdata2,
+	output[`WORD_RANGE]			regValue
+);
+
+reg[`WORD_RANGE]					regs[0 : `REG_NUM - 1];
+reg[`WORD_RANGE]					hi;
+reg[`WORD_RANGE]					lo;
+
+assign								regValue = (regAddr[5]) ? (regAddr[0] ? hi : lo)
+														: regs[regAddr[4 : 0]]; 
+
+integer i;
+initial 
+begin
+	for (i = 0; i < 32; i = i + 1)
+		regs[i] = 0;
+	hi = 0;
+	lo = 0;
+end
+
+// write
+always @(posedge clk)
+begin
+	if (~rst && we & waddr != 0)  // regs[0] is identical to 0
+		regs[waddr] <= wdata;
+end
+
+// write hi
+always @(posedge clk)
+begin
+	if (~rst && wehi)  // regs[0] is identical to 0
+		hi <= whidata; 
+end
+
+// write lo
+always @(posedge clk)
+begin
+	if (~rst && welo)  // regs[0] is identical to 0
+		lo <= wlodata; 
+end
+
+// read1 
+always @(rst, re1, raddr1, we, waddr, wdata)
+begin
+	if (rst)
+		rdata1 = 0;
+	else if (!re1)
+		rdata1 = 0;
+	else if (raddr1 == 0)         // regs[0] is identical to 0
+		rdata1 = 0;
+	else if (re1 && we && raddr1 == waddr)  // decode-writeBack RAW
+		rdata1 = wdata;
+	else 
+		rdata1 = regs[raddr1]; 
+end
+
+// read2
+always @(rst, re2, raddr2, we, waddr, wdata)
+begin
+	if (rst)
+		rdata2 = 0;
+	else if (!re2)
+		rdata2 = 0;
+	else if (raddr2 == 0)         // regs[0] is identical to 0
+		rdata2 = 0;
+	else if (re2 && we && raddr2 == waddr) // decode-writeBack RAW
+		rdata2 = wdata; 
+	else 
+		rdata2 = regs[raddr2]; 
+end
+
+// read hi
+always @(rst, rehi, wehi, whidata, hi)
+begin
+	if (rst)
+		rhidata = 0;
+	else if (~rehi)
+		rhidata = 0;
+	else if (rehi && wehi)  // decode-writeBack RAW
+		rhidata = whidata;
+	else 
+		rhidata = hi; 
+end
+
+// read lo
+always @(rst, relo, welo, wlodata, lo)
+begin
+	if (rst)
+		rlodata = 0;
+	else if (~relo)
+		rlodata = 0;
+	else if (relo && welo)  // decode-writeBack RAW
+		rlodata = wlodata;
+	else 
+		rlodata = lo; 
+end
+
+endmodule

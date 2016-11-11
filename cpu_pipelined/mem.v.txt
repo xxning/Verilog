@@ -1,0 +1,465 @@
+`timescale 1ns / 1ps
+//////////////////////////////////////////////////////////////////////////////////
+// Company: 
+// Engineer: 
+// 
+// Create Date:    22:28:47 04/30/2015 
+// Design Name: 
+// Module Name:    mem 
+// Project Name: 
+// Target Devices: 
+// Tool versions: 
+// Description: 
+//
+// Dependencies: 
+//
+// Revision: 
+// Revision 0.01 - File Created
+// Additional Comments: 
+//
+//////////////////////////////////////////////////////////////////////////////////
+
+`include "defs.v"
+
+module mem(
+	input											rst,
+	input						   				reg_write_en_in,
+	input[`REG_RANGE]		  					reg_write_addr_in,
+	input[`WORD_RANGE]						reg_write_data_in,
+	input											hi_write_en_in,
+	input											lo_write_en_in,
+	input[`WORD_RANGE]						hi_write_data_in,
+	input[`WORD_RANGE]						lo_write_data_in,
+	input[`WORD_RANGE]						storeValue_in,
+	input[`ADDR_RANGE]						mem_addr_in,
+	input[`ALU_OP_RANGE]						alu_op,
+	input[`WORD_RANGE]						ram_data_in, 
+	output reg									reg_write_en_out,
+	output reg[`REG_RANGE]					reg_write_addr_out,
+	output reg[`WORD_RANGE]					reg_write_data_out, 
+	output reg									hi_write_en_out,
+	output reg	 								lo_write_en_out,
+	output reg[`WORD_RANGE]					hi_write_data_out,
+	output reg[`WORD_RANGE]					lo_write_data_out,
+	output reg									we,
+	output reg[`IP_CORE_RAM_SEL_RANGE] 	sel,
+	output reg[`ADDR_RANGE]					mem_addr_out,
+	output reg[`WORD_RANGE]					storeValue_out,
+	
+	// mem-execute RAW
+	output reg									operand_en, 
+	output reg[`WORD_RANGE]					operand, 
+	output reg[`REG_RANGE]					operand_addr,
+	
+	// mem-decode RAW
+	output reg									decode_reg_write_en,
+	output reg[`REG_RANGE]					decode_reg_write_addr,
+	output reg[`WORD_RANGE]					decode_reg_write_data,
+	output reg 									decode_hi_write_en,
+	output reg									decode_lo_write_en,
+	output reg[`WORD_RANGE]					decode_hi_write_data,
+	output reg[`WORD_RANGE]					decode_lo_write_data
+);
+
+always @(*)
+begin
+	if (rst)
+	begin
+		reg_write_en_out <= 0;
+		reg_write_addr_out <= 0;
+		reg_write_data_out <= 0;
+		hi_write_en_out <= 0;
+		lo_write_en_out <= 0;
+		hi_write_data_out <= 0;
+		lo_write_data_out <= 0;
+		decode_reg_write_en <= 0;
+		decode_reg_write_addr <= 0;
+		decode_reg_write_data <= 0;
+		decode_hi_write_en <= 0;
+		decode_lo_write_en <= 0;
+		decode_hi_write_data <= 0;
+		decode_lo_write_data <= 0;
+		we <= 0;
+		mem_addr_out <= 0;
+		storeValue_out <= 0;
+		operand_en <= 0; 
+		operand <= 0;
+		operand_addr <= 0;
+	end
+	else
+	begin
+		reg_write_en_out <= reg_write_en_in;
+		reg_write_addr_out <= reg_write_addr_in;
+		
+		// avoid oscillator
+		case (alu_op)
+			`ALU_OP_LB : ;
+			`ALU_OP_LBU : ;
+			`ALU_OP_LH : ;
+			`ALU_OP_LHU : ;
+			`ALU_OP_LW : ;
+			`ALU_OP_LWL : ;
+			`ALU_OP_LWR : ;
+			default : 
+			begin
+				reg_write_data_out <= reg_write_data_in;
+				operand_en <= 0; 
+				operand <= 0;
+				operand_addr <= 0;
+			end
+		endcase
+		
+		hi_write_en_out <= hi_write_en_in;
+		lo_write_en_out <= lo_write_en_in;
+		hi_write_data_out <= hi_write_data_in;
+		lo_write_data_out <= lo_write_data_in;
+		decode_reg_write_en <= reg_write_en_out; 
+	   decode_reg_write_addr <= reg_write_addr_out;
+		decode_reg_write_data <= reg_write_data_out;
+		decode_hi_write_en <= hi_write_en_out;
+		decode_lo_write_en <= lo_write_en_out;
+		decode_hi_write_data <= hi_write_data_out;
+		decode_lo_write_data <= lo_write_data_out;
+		mem_addr_out <= mem_addr_in; 
+		storeValue_out <= storeValue_in; 
+		we <= 0;
+		
+		case (alu_op)
+			
+			`ALU_OP_LWL :
+			begin
+				sel <= 4'b1111;
+				
+				case (mem_addr_in[1 : 0])
+					2'b00 : reg_write_data_out <= ram_data_in; 				
+					2'b01 : reg_write_data_out <= {ram_data_in[23 : 0], storeValue_in[7 : 0]}; 
+					2'b10 : reg_write_data_out <= {ram_data_in[15 : 0], storeValue_in[15 : 0]};  
+					2'b11 : reg_write_data_out <= {ram_data_in[7 : 0], storeValue_in[23 : 0]};
+				endcase
+				
+				operand_en <= 1; 
+				operand <= reg_write_data_out;
+				operand_addr <= reg_write_addr_out; 
+				
+			end
+			
+			`ALU_OP_LWR :
+			begin
+				sel <= 4'b1111;
+				
+				case (mem_addr_in[1 : 0])
+					2'b00 : reg_write_data_out <= {storeValue_in[31 : 8], ram_data_in[31 : 24]}; 
+					2'b01 : reg_write_data_out <= {storeValue_in[31 : 16], ram_data_in[31 : 16]}; 
+					2'b10 : reg_write_data_out <= {storeValue_in[31 : 24], ram_data_in[31 : 8]}; 
+					2'b11 : reg_write_data_out <= ram_data_in;
+				endcase
+				
+				operand_en <= 1; 
+				operand <= reg_write_data_out;
+				operand_addr <= reg_write_addr_out; 
+					
+			end
+			
+			`ALU_OP_SWL : 
+			begin
+				we <= 1;
+			
+				case (mem_addr_in[1 : 0])
+					2'b00 : 
+					begin
+						sel <= 4'b1111;
+						storeValue_out <= storeValue_in; 
+					end
+					
+					2'b01 : 
+					begin
+						sel <= 4'b0111;
+						storeValue_out <= {8'b0, storeValue_in[31 : 8]}; 
+					end
+					
+					2'b10 : 
+					begin
+						sel <= 4'b0011;
+						storeValue_out <= {16'b0, storeValue_in[31 : 16]}; 
+					end
+					
+					2'b11 : 
+					begin
+						sel <= 4'b0001;
+						storeValue_out <= {24'b0, storeValue_in[31 : 24]};
+					end
+					
+				endcase
+			end
+		 
+			`ALU_OP_SWR : 
+			begin
+				we <= 1;
+				
+				case (mem_addr_in[1 : 0])
+					2'b00 : 
+					begin
+						sel <= 4'b1000;
+						storeValue_out <= {storeValue_in[7 : 0], 24'b0};
+					end
+					
+					2'b01 : 
+					begin
+						sel <= 4'b1100;
+						storeValue_out <= {storeValue_in[15 : 0], 16'b0}; 
+					end
+					
+					2'b10 : 
+					begin
+						sel <= 4'b1110;
+						storeValue_out <= {storeValue_in[23 : 0], 8'b0}; 
+					end
+					
+					2'b11 : 
+					begin
+						sel <= 4'b1111;
+						storeValue_out <= storeValue_in;
+					end
+					
+				endcase
+			end
+		
+			`ALU_OP_SB :
+			begin
+				we <= 1;
+				
+				case (mem_addr_in[1 : 0])
+					2'b00 : 
+					begin
+						sel <= 4'b1000; 	
+						storeValue_out <= {storeValue_in[7 : 0], 24'b0}; 
+					end
+					
+					2'b01 : 
+					begin
+						sel <= 4'b0100; 
+						storeValue_out <= {8'b0, storeValue_in[7 : 0], 16'b0}; 
+					end
+					
+					2'b10 : 
+					begin
+						sel <= 4'b0010; 
+						storeValue_out <= {16'b0, storeValue_in[7 : 0], 8'b0}; 
+					end
+					
+					2'b11 : 
+					begin
+						sel <= 4'b0001; 
+						storeValue_out <= {24'b0, storeValue_in[7 : 0]}; 
+					end
+				endcase
+			end
+			
+			`ALU_OP_SH : 
+			begin
+				we <= 1;
+				
+				case (mem_addr_in[1 : 0])
+					2'b00 : 
+					begin
+						sel <= 4'b1100; 
+						storeValue_out <= {storeValue_in[15 : 0], 16'b0}; 
+					end
+					
+					2'b10 : 
+					begin
+						sel <= 4'b0011;
+						storeValue_out <= {16'b0, storeValue_in[15 : 0]}; 
+					end
+					
+					default : 
+					begin
+						sel <= 4'b0000;
+						storeValue_out <= 0; 
+					end
+				endcase
+			end
+			
+			`ALU_OP_SW : 
+			begin
+				we <= 1;
+					
+				if (mem_addr_in[1 : 0] != 2'b00)
+				begin
+					sel <= 4'b0000;
+					storeValue_out <= 0; 
+				end
+				else
+				begin
+					sel <= 4'b1111;
+					storeValue_out <= storeValue_in; 
+				end
+			end
+		
+			`ALU_OP_LB : 
+			begin
+				
+				case (mem_addr_in[1 : 0])
+					2'b00 : 
+					begin
+						sel <= 4'b1000; 	
+						reg_write_data_out <= {{24{ram_data_in[31]}}, ram_data_in[31 : 24]}; 
+					end
+					
+					2'b01 : 
+					begin
+						sel <= 4'b0100; 
+						reg_write_data_out <= {{24{ram_data_in[23]}}, ram_data_in[23 : 16]}; 
+					end
+					
+					2'b10 : 
+					begin
+						sel <= 4'b0010; 
+						reg_write_data_out <= {{24{ram_data_in[15]}}, ram_data_in[15 : 8]}; 
+					end
+					
+					2'b11 : 
+					begin
+						sel <= 4'b0001; 
+						reg_write_data_out <= {{24{ram_data_in[7]}}, ram_data_in[7 : 0]}; 
+					end
+				
+				endcase
+				
+				operand_en <= 1; 
+				operand <= reg_write_data_out;
+				operand_addr <= reg_write_addr_out; 
+				
+			end
+			
+			`ALU_OP_LBU :  
+			begin
+				
+				case (mem_addr_in[1 : 0])
+					2'b00 : 
+					begin
+						sel <= 4'b1000; 	
+						reg_write_data_out <= {{24{1'b0}}, ram_data_in[31 : 24]}; 
+					end
+					
+					2'b01 : 
+					begin
+						sel <= 4'b0100; 
+						reg_write_data_out <= {{24{1'b0}}, ram_data_in[23 : 16]}; 
+					end
+					
+					2'b10 : 
+					begin
+						sel <= 4'b0010; 
+						reg_write_data_out <= {{24{1'b0}}, ram_data_in[15 : 8]}; 
+					end
+					
+					2'b11 : 
+					begin
+						sel <= 4'b0001; 
+						reg_write_data_out <= {{24{1'b0}}, ram_data_in[7 : 0]}; 
+					end
+				
+				endcase
+				
+				operand_en <= 1; 
+				operand <= reg_write_data_out;
+				operand_addr <= reg_write_addr_out; 
+				
+			end
+			
+			`ALU_OP_LH :  
+			begin
+			
+				case (mem_addr_in[1 : 0])
+					2'b00 : 
+					begin
+						sel <= 4'b1100; 
+						reg_write_data_out <= {{16{ram_data_in[31]}}, ram_data_in[31 : 16]}; 
+						operand_en <= 1; 
+						operand <= reg_write_data_out;
+						operand_addr <= reg_write_addr_out; 
+					end
+					
+					2'b10 : 
+					begin
+						sel <= 4'b0011;
+						reg_write_data_out <= {{16{ram_data_in[15]}}, ram_data_in[15 : 0]}; 
+						operand_en <= 1; 
+						operand <= reg_write_data_out;
+						operand_addr <= reg_write_addr_out; 
+					end
+					
+					default : 
+					begin
+						sel <= 4'b0000;
+						reg_write_en_out <= 0; 
+						reg_write_data_out <= reg_write_data_in;
+						operand_en <= 0; 
+						operand <= 0;
+						operand_addr <= 0; 
+					end
+				endcase
+				
+		
+				
+			end
+			
+			`ALU_OP_LHU :  
+			begin
+			
+				case (mem_addr_in[1 : 0])
+					2'b00 : 
+					begin
+						sel <= 4'b1100; 
+						reg_write_data_out <= {{16{1'b0}}, ram_data_in[31 : 16]}; 
+					end
+					
+					2'b10 : 
+					begin
+						sel <= 4'b0011;
+						reg_write_data_out <= {{16{1'b0}}, ram_data_in[15 : 0]}; 
+					end
+					
+					default : 
+					begin
+						sel <= 4'b0000;
+						reg_write_en_out <= 0; 
+						reg_write_data_out <= reg_write_data_in;
+					end
+				endcase
+				
+				operand_en <= 1; 
+				operand <= reg_write_data_out;
+				operand_addr <= reg_write_addr_out; 
+				
+			end
+			
+			`ALU_OP_LW :  
+			begin
+				if (mem_addr_in[1 : 0] != 2'b00)
+				begin
+					sel <= 4'b0000;
+					reg_write_en_out <= 0; 
+					reg_write_data_out <= reg_write_data_in;
+					operand_en <= 0; 
+					operand <= 0;
+					operand_addr <= 0; 
+				end
+				else
+				begin
+					sel <= 4'b1111;
+					reg_write_data_out <= ram_data_in; 
+					operand_en <= 1; 
+					operand <= reg_write_data_out;
+					operand_addr <= reg_write_addr_out; 
+				end
+			end
+			
+			default : ;
+		endcase
+		
+	end
+end
+
+endmodule

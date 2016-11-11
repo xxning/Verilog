@@ -1,0 +1,2288 @@
+`timescale 1ns / 1ps
+//////////////////////////////////////////////////////////////////////////////////
+// Company: 
+// Engineer: 
+// 
+// Create Date:    20:54:20 04/30/2015 
+// Design Name: 
+// Module Name:    decode 
+// Project Name: 
+// Target Devices: 
+// Tool versions: 
+// Description: 
+//
+// Dependencies: 
+//
+// Revision: 
+// Revision 0.01 - File Created
+// Additional Comments: 
+//
+//////////////////////////////////////////////////////////////////////////////////
+
+`include "defs.v"
+
+module decode(
+	input									rst,
+	input[`WORD_RANGE]				inst,
+	input[`WORD_RANGE]				reg_read1_data,
+	input[`WORD_RANGE]				reg_read2_data,
+	input[`ADDR_RANGE]				pc, 
+	
+	//stall
+	output reg							is_cond_branch,
+	
+	// decode-mem RAW
+	input									mem_lo_write_en,
+	input									mem_hi_write_en,
+	input[`WORD_RANGE]				mem_lo_write_data,
+	input[`WORD_RANGE]				mem_hi_write_data,
+	input									mem_reg_write_en,
+	input[`REG_RANGE]					mem_reg_write_addr,
+	input[`WORD_RANGE]				mem_reg_write_data,
+	    
+	// decode-execute RAW
+	input									execute_lo_write_en,
+	input									execute_hi_write_en,
+	input[`WORD_RANGE]				execute_lo_write_data,
+	input[`WORD_RANGE]				execute_hi_write_data,
+	input									execute_reg_write_en,
+	input[`REG_RANGE]					execute_reg_write_addr,
+	input[`WORD_RANGE]				execute_reg_write_data,
+	
+	input[`WORD_RANGE]				hi_read_data,
+	input[`WORD_RANGE]				lo_read_data, 
+	output[`WORD_RANGE]				hi_read_data_out,
+	output[`WORD_RANGE]				lo_read_data_out,
+	
+	output reg							reg_read1_en,
+	output reg							reg_read2_en,
+	output reg[`REG_RANGE]			reg_read1_addr,
+	output reg[`REG_RANGE]			reg_read2_addr,
+	output reg							reg_write_en,
+	output reg[`REG_RANGE]			reg_write_addr,
+	output reg[`WORD_RANGE]			operand1,
+	output reg[`WORD_RANGE]			operand2,
+	output reg[`ALU_OP_RANGE]		alu_op,
+	output reg							hi_read_en,
+	output reg							lo_read_en,
+	output reg							hi_write_en,
+	output reg							lo_write_en,
+	output reg[`ADDR_RANGE]			pcSetValue,
+	output reg							pcSet_en,
+	output reg[`WORD_RANGE]			returnAddr,
+	output[`INST_OFFSET]				offset		
+); 
+
+assign									offset = inst[`INST_OFFSET];
+
+// execute-decode RAW
+assign									lo_read_data_out = (lo_read_en && execute_lo_write_en) 
+																		? execute_lo_write_data : lo_read_data; 
+assign									hi_read_data_out = (hi_read_en && execute_hi_write_en) 
+																		? execute_hi_write_data : hi_read_data;
+
+wire[`OPTICODE_RANGE]				opticode = inst[`OPTICODE_POS];
+reg[`WORD_RANGE]						imm; 
+
+wire[`FUNC_RANGE]						func = inst[`FUNC_POS]; 
+wire[`REGIMM_FUNC_RANGE]			regimm_func = inst[`REGIMM_FUNC_POS]; 
+wire[`TEN_SIX_RANGE]					ten_six = inst[`TEN_SIX_POS]; 
+wire[`TWENTYFIVE_TWENTYONE_RANGE]twentyfive_twentyone = inst[`TWENTYFIVE_TWENTYONE_POS]; 
+wire[`TWENTY_SIXTEEN_RANGE] 		twenty_sixteen = inst[`TWENTY_SIXTEEN_POS]; 
+wire[`FIFTEEN_ELEVEN_RANGE]		fifteen_eleven = inst[`FIFTEEN_ELEVEN_POS]; 				
+wire[`ADDR_RANGE]						pc_add_4 = pc + 4; 
+
+
+wire 										is_m_ins = (opticode == `OPTICODE_SPECIAL2 && 
+															(func == `FUNC_MADD || func == `FUNC_MADDU || 
+															 func == `FUNC_MSUB || func == `FUNC_MSUBU)) ? 1 : 0; 
+
+// stall
+always @(*)
+begin
+	if (rst)
+		is_cond_branch = 0;
+	else
+	begin
+		case (opticode)
+			`OPTICODE_BEQ : is_cond_branch = 1;
+			`OPTICODE_BGTZ : is_cond_branch = 1;
+			`OPTICODE_BLEZ : is_cond_branch = 1;
+			`OPTICODE_BNE : is_cond_branch = 1;
+			`OPTICODE_REGIMM : is_cond_branch = 1;
+			default : is_cond_branch = 0;
+		endcase
+	end
+end
+
+// decode
+always @(*)
+begin 
+	if (rst)
+	begin
+		reg_read1_en = 0;
+		reg_read2_en = 0;
+		reg_read1_addr = 0;
+		reg_read2_addr = 0; 
+		reg_write_en = 0;
+		reg_write_addr = 0;
+		alu_op = 0;
+		hi_read_en = 0;
+		lo_read_en = 0;
+		hi_write_en = 0;
+		lo_write_en = 0;
+		returnAddr = 0;
+		pcSet_en = 0; 
+		pcSetValue = 0; 
+	end
+	else
+	begin
+		case (opticode)
+			
+			`OPTICODE_LB : 
+			begin
+				reg_read1_en = 1;
+				reg_read2_en = 0;
+				reg_read1_addr = inst[`INST_REG_1];
+				reg_read2_addr = 0; 
+				reg_write_en = 1;
+				reg_write_addr = inst[`INST_REG_2];
+				alu_op = `ALU_OP_LB;
+				hi_read_en = 0;
+				lo_read_en = 0;
+				hi_write_en = 0;
+				lo_write_en = 0;
+				returnAddr = 0;
+				pcSet_en = 0; 
+				pcSetValue = 0; 
+			end
+			
+			`OPTICODE_LBU : 
+			begin
+				reg_read1_en = 1;
+				reg_read2_en = 0;
+				reg_read1_addr = inst[`INST_REG_1];
+				reg_read2_addr = 0; 
+				reg_write_en = 1;
+				reg_write_addr = inst[`INST_REG_2];
+				alu_op = `ALU_OP_LBU;
+				hi_read_en = 0;
+				lo_read_en = 0;
+				hi_write_en = 0;
+				lo_write_en = 0;
+				returnAddr = 0;
+				pcSet_en = 0; 
+				pcSetValue = 0; 
+			end
+			
+			`OPTICODE_LH : 
+			begin
+				reg_read1_en = 1;
+				reg_read2_en = 0;
+				reg_read1_addr = inst[`INST_REG_1];
+				reg_read2_addr = 0; 
+				reg_write_en = 1;
+				reg_write_addr = inst[`INST_REG_2];
+				alu_op = `ALU_OP_LH;
+				hi_read_en = 0;
+				lo_read_en = 0;
+				hi_write_en = 0;
+				lo_write_en = 0;
+				returnAddr = 0;
+				pcSet_en = 0; 
+				pcSetValue = 0; 
+			end
+			
+			`OPTICODE_LHU : 
+			begin
+				reg_read1_en = 1;
+				reg_read2_en = 0;
+				reg_read1_addr = inst[`INST_REG_1];
+				reg_read2_addr = 0; 
+				reg_write_en = 1;
+				reg_write_addr = inst[`INST_REG_2];
+				alu_op = `ALU_OP_LHU;
+				hi_read_en = 0;
+				lo_read_en = 0;
+				hi_write_en = 0;
+				lo_write_en = 0;
+				returnAddr = 0;
+				pcSet_en = 0; 
+				pcSetValue = 0; 
+			end
+			
+			`OPTICODE_LW : 
+			begin
+				reg_read1_en = 1;
+				reg_read2_en = 0;
+				reg_read1_addr = inst[`INST_REG_1];
+				reg_read2_addr = 0; 
+				reg_write_en = 1;
+				reg_write_addr = inst[`INST_REG_2];
+				alu_op = `ALU_OP_LW;
+				hi_read_en = 0;
+				lo_read_en = 0;
+				hi_write_en = 0;
+				lo_write_en = 0;
+				returnAddr = 0;
+				pcSet_en = 0; 
+				pcSetValue = 0; 
+			end
+			
+			`OPTICODE_SB : 
+			begin
+				reg_read1_en = 1;
+				reg_read2_en = 1;
+				reg_read1_addr = inst[`INST_REG_1];
+				reg_read2_addr = inst[`INST_REG_2]; 
+				reg_write_en = 0;
+				reg_write_addr = 0;
+				alu_op = `ALU_OP_SB;
+				hi_read_en = 0;
+				lo_read_en = 0;
+				hi_write_en = 0;
+				lo_write_en = 0;
+				returnAddr = 0;
+				pcSet_en = 0; 
+				pcSetValue = 0; 
+			end
+			
+			`OPTICODE_SH : 
+			begin
+			reg_read1_en = 1;
+				reg_read2_en = 1;
+				reg_read1_addr = inst[`INST_REG_1];
+				reg_read2_addr = inst[`INST_REG_2]; 
+				reg_write_en = 0;
+				reg_write_addr = 0;
+				alu_op = `ALU_OP_SH;
+				hi_read_en = 0;
+				lo_read_en = 0;
+				hi_write_en = 0;
+				lo_write_en = 0;
+				returnAddr = 0;
+				pcSet_en = 0; 
+				pcSetValue = 0; 
+			end
+			
+			`OPTICODE_SW : 
+			begin
+				reg_read1_en = 1;
+				reg_read2_en = 1;
+				reg_read1_addr = inst[`INST_REG_1];
+				reg_read2_addr = inst[`INST_REG_2]; 
+				reg_write_en = 0;
+				reg_write_addr = 0;
+				alu_op = `ALU_OP_SW;
+				hi_read_en = 0;
+				lo_read_en = 0;
+				hi_write_en = 0;
+				lo_write_en = 0;
+				returnAddr = 0;
+				pcSet_en = 0; 
+				pcSetValue = 0; 
+			end
+			
+			`OPTICODE_LWL : 
+			begin
+				reg_read1_en = 1;
+				reg_read2_en = 1;
+				reg_read1_addr = inst[`INST_REG_1];
+				reg_read2_addr = inst[`INST_REG_2]; 
+				reg_write_en = 1;
+				reg_write_addr = inst[`INST_REG_2];
+				alu_op = `ALU_OP_LWL;
+				hi_read_en = 0;
+				lo_read_en = 0;
+				hi_write_en = 0;
+				lo_write_en = 0;
+				returnAddr = 0;
+				pcSet_en = 0; 
+				pcSetValue = 0; 
+			end
+			
+			`OPTICODE_LWR : 
+			begin
+				reg_read1_en = 1;
+				reg_read2_en = 1;
+				reg_read1_addr = inst[`INST_REG_1];
+				reg_read2_addr = inst[`INST_REG_2]; 
+				reg_write_en = 1;
+				reg_write_addr = inst[`INST_REG_2];
+				alu_op = `ALU_OP_LWR;
+				hi_read_en = 0;
+				lo_read_en = 0;
+				hi_write_en = 0;
+				lo_write_en = 0;
+				returnAddr = 0;
+				pcSet_en = 0; 
+				pcSetValue = 0; 
+			end
+			
+			`OPTICODE_SWL : 
+			begin
+				reg_read1_en = 1;
+				reg_read2_en = 1;
+				reg_read1_addr = inst[`INST_REG_1];
+				reg_read2_addr = inst[`INST_REG_2]; 
+				reg_write_en = 0;
+				reg_write_addr = 0;
+				alu_op = `ALU_OP_SWL;
+				hi_read_en = 0;
+				lo_read_en = 0;
+				hi_write_en = 0;
+				lo_write_en = 0;
+				returnAddr = 0;
+				pcSet_en = 0; 
+				pcSetValue = 0; 
+			end
+			
+			`OPTICODE_SWR :
+			begin
+				reg_read1_en = 1;
+				reg_read2_en = 1;
+				reg_read1_addr = inst[`INST_REG_1];
+				reg_read2_addr = inst[`INST_REG_2]; 
+				reg_write_en = 0;
+				reg_write_addr = 0;
+				alu_op = `ALU_OP_SWR;
+				hi_read_en = 0;
+				lo_read_en = 0;
+				hi_write_en = 0;
+				lo_write_en = 0;
+				returnAddr = 0;
+				pcSet_en = 0; 
+				pcSetValue = 0; 
+			end
+			
+			`OPTICODE_J : 
+			begin
+				reg_read1_en = 0;
+				reg_read1_addr = 0;
+				reg_read2_en = 0;
+				reg_read2_addr = 0; 
+				reg_write_en = 0;
+				reg_write_addr = 0;
+				alu_op = 0;
+				imm = 0; 
+				hi_read_en = 0;
+				lo_read_en = 0;
+				hi_write_en = 0;
+				lo_write_en = 0;
+				returnAddr = 0;
+				pcSet_en = 1;
+				pcSetValue = {pc_add_4[31 : 28], inst[`INST_J], 2'b00}; 
+			end
+			
+			`OPTICODE_JAL : 
+			begin
+				reg_read1_en = 0;
+				reg_read1_addr = 0;
+				reg_read2_en = 0;
+				reg_read2_addr = 0; 
+				reg_write_en = 1;
+				reg_write_addr = `REG_RD;
+				alu_op = 0;
+				imm = 0; 
+				hi_read_en = 0;
+				lo_read_en = 0;
+				hi_write_en = 0;
+				lo_write_en = 0;
+				returnAddr = pc_add_4;
+				pcSet_en = 1; 
+				pcSetValue = {pc_add_4[31 : 28], inst[`INST_J], 2'b00}; 
+			end
+			
+			`OPTICODE_BEQ : 
+			begin
+				reg_read1_en = 1;
+				reg_read1_addr = inst[`INST_REG_1];
+				reg_read2_en = 1;
+				reg_read2_addr = inst[`INST_REG_2]; 
+				reg_write_en = 0;
+				reg_write_addr = 0;
+				alu_op = 0;
+				imm = 0; 
+				hi_read_en = 0;
+				lo_read_en = 0;
+				hi_write_en = 0;
+				lo_write_en = 0;
+				returnAddr = 0;
+				if (operand1 == operand2)
+				begin
+					pcSet_en = 1; 
+					pcSetValue = {{14{inst[`INST_OFFSET_SIGN]}}, inst[`INST_OFFSET], 2'b00} + pc;
+				end
+				else
+				begin
+					pcSet_en = 0; 
+					pcSetValue = 0;
+				end
+			end
+			
+			`OPTICODE_BGTZ : 
+			begin
+				if (twenty_sixteen == 0)
+				begin
+					reg_read1_en = 1;
+					reg_read1_addr = inst[`INST_REG_1];
+					reg_read2_en = 0;
+					reg_read2_addr = 0; 
+					reg_write_en = 0;
+					reg_write_addr = 0;
+					alu_op = 0;
+					imm = 0; 
+					hi_read_en = 0;
+					lo_read_en = 0;
+					hi_write_en = 0;
+					lo_write_en = 0;
+					returnAddr = 0;
+					if (operand1[31] == 0 && operand1 != 0)
+					begin
+						pcSet_en = 1; 
+						pcSetValue = {{14{inst[`INST_OFFSET_SIGN]}}, inst[`INST_OFFSET], 2'b00} + pc;
+					end
+					else
+					begin
+						pcSet_en = 0; 
+						pcSetValue = 0;
+					end
+				end
+				else
+				begin
+					reg_read1_en = 0;
+					reg_read1_addr = 0;
+					reg_read2_en = 0;
+					reg_read2_addr = 0; 
+					reg_write_en = 0;
+					reg_write_addr = 0;
+					alu_op = 0;
+					imm = 0; 
+					hi_read_en = 0;
+					lo_read_en = 0;
+					hi_write_en = 0;
+					lo_write_en = 0;
+					returnAddr = 0;
+					pcSet_en = 0; 
+					pcSetValue = 0; 
+				end
+			end
+			
+			`OPTICODE_BLEZ : 
+			begin
+				if (twenty_sixteen == 0)
+				begin
+					reg_read1_en = 1;
+					reg_read1_addr = inst[`INST_REG_1];
+					reg_read2_en = 0;
+					reg_read2_addr = 0; 
+					reg_write_en = 0;
+					reg_write_addr = 0;
+					alu_op = 0;
+					imm = 0; 
+					hi_read_en = 0;
+					lo_read_en = 0;
+					hi_write_en = 0;
+					lo_write_en = 0;
+					returnAddr = 0;
+					if (operand1 == 0 || operand1[31] == 1)
+					begin
+						pcSet_en = 1; 
+						pcSetValue = {{14{inst[`INST_OFFSET_SIGN]}}, inst[`INST_OFFSET], 2'b00} + pc;
+					end
+					else
+					begin
+						pcSet_en = 0; 
+						pcSetValue = 0;
+					end
+				end
+				else
+				begin
+					reg_read1_en = 0;
+					reg_read1_addr = 0;
+					reg_read2_en = 0;
+					reg_read2_addr = 0; 
+					reg_write_en = 0;
+					reg_write_addr = 0;
+					alu_op = 0;
+					imm = 0; 
+					hi_read_en = 0;
+					lo_read_en = 0;
+					hi_write_en = 0;
+					lo_write_en = 0;
+					returnAddr = 0;
+					pcSet_en = 0; 
+					pcSetValue = 0; 
+				end
+			end
+			
+			`OPTICODE_BNE : 
+			begin
+				reg_read1_en = 1;
+				reg_read1_addr = inst[`INST_REG_1];
+				reg_read2_en = 1;
+				reg_read2_addr = inst[`INST_REG_2]; 
+				reg_write_en = 0;
+				reg_write_addr = 0;
+				alu_op = 0;
+				imm = 0; 
+				hi_read_en = 0;
+				lo_read_en = 0;
+				hi_write_en = 0;
+				lo_write_en = 0;
+				returnAddr = 0;
+				if (operand1 != operand2)
+				begin
+					pcSet_en = 1; 
+					pcSetValue = {{14{inst[`INST_OFFSET_SIGN]}}, inst[`INST_OFFSET], 2'b00} + pc;
+				end
+				else
+				begin
+					pcSet_en = 0; 
+					pcSetValue = 0;
+				end
+			end
+			
+			`OPTICODE_REGIMM : 
+			begin
+				case (regimm_func)
+					`REGIMM_FUNC_BLTZ : 
+					begin
+						reg_read1_en = 1;
+						reg_read1_addr = inst[`INST_REG_1];
+						reg_read2_en = 0;
+						reg_read2_addr = 0; 
+						reg_write_en = 0;
+						reg_write_addr = 0;
+						alu_op = 0;
+						imm = 0; 
+						hi_read_en = 0;
+						lo_read_en = 0;
+						hi_write_en = 0;
+						lo_write_en = 0;
+						returnAddr = 0;
+						if (operand1[31] == 1)
+						begin
+							pcSet_en = 1; 
+							pcSetValue = {{14{inst[`INST_OFFSET_SIGN]}}, inst[`INST_OFFSET], 2'b00} + pc;
+						end
+						else
+						begin
+							pcSet_en = 0; 
+							pcSetValue = 0; 
+						end
+					end
+					
+					`REGIMM_FUNC_BLTZAL : 
+					begin
+						reg_read1_en = 1;
+						reg_read1_addr = inst[`INST_REG_1];
+						reg_read2_en = 0;
+						reg_read2_addr = 0; 
+						reg_write_en = 1;
+						reg_write_addr = `REG_RD;
+						alu_op = 0;
+						imm = 0; 
+						hi_read_en = 0;
+						lo_read_en = 0;
+						hi_write_en = 0;
+						lo_write_en = 0;
+						returnAddr = pc_add_4;
+						if (operand1[31] == 1)
+						begin
+							pcSet_en = 1; 
+							pcSetValue = {{14{inst[`INST_OFFSET_SIGN]}}, inst[`INST_OFFSET], 2'b00} + pc;
+						end
+						else
+						begin
+							pcSet_en = 0; 
+							pcSetValue = 0; 
+						end
+					end
+					
+					`REGIMM_FUNC_BGEZ : 
+					begin
+						reg_read1_en = 1;
+						reg_read1_addr = inst[`INST_REG_1];
+						reg_read2_en = 0;
+						reg_read2_addr = 0; 
+						reg_write_en = 0;
+						reg_write_addr = 0;
+						alu_op = 0;
+						imm = 0; 
+						hi_read_en = 0;
+						lo_read_en = 0;
+						hi_write_en = 0;
+						lo_write_en = 0;
+						returnAddr = 0;
+						if (operand1[31] == 0)
+						begin
+							pcSet_en = 1; 
+							pcSetValue = {{14{inst[`INST_OFFSET_SIGN]}}, inst[`INST_OFFSET], 2'b00} + pc;
+						end
+						else
+						begin
+							pcSet_en = 0; 
+							pcSetValue = 0; 
+						end
+					end
+					
+					`REGIMM_FUNC_BGEZAL : 
+					begin
+						reg_read1_en = 1;
+						reg_read1_addr = inst[`INST_REG_1];
+						reg_read2_en = 0;
+						reg_read2_addr = 0; 
+						reg_write_en = 1;
+						reg_write_addr = `REG_RD;
+						alu_op = 0;
+						imm = 0; 
+						hi_read_en = 0;
+						lo_read_en = 0;
+						hi_write_en = 0;
+						lo_write_en = 0;
+						returnAddr = pc_add_4;
+						if (operand1[31] == 0)
+						begin
+							pcSet_en = 1; 
+							pcSetValue = {{14{inst[`INST_OFFSET_SIGN]}}, inst[`INST_OFFSET], 2'b00} + pc;
+						end
+						else
+						begin
+							pcSet_en = 0; 
+							pcSetValue = 0; 
+						end
+					end
+					
+				endcase
+			end
+			
+			`OPTICODE_ADDI : 
+			begin
+				reg_read1_en = 1;
+				reg_read1_addr = inst[`INST_REG_1];
+				reg_read2_en = 0;
+				reg_read2_addr = 0; 
+				reg_write_en = 1;
+				reg_write_addr = inst[`INST_REG_2];
+				alu_op = `ALU_OP_ADD;
+				imm = {{16{inst[`INST_SIGN_POS]}},inst[`INST_IMM_POS]}; // zero-extended
+				hi_read_en = 0;
+				lo_read_en = 0;
+				hi_write_en = 0;
+				lo_write_en = 0;
+				returnAddr = 0;
+				pcSet_en = 0;
+				pcSetValue = 0; 
+			end
+			
+			`OPTICODE_ADDIU : 
+			begin
+				reg_read1_en = 1;
+				reg_read1_addr = inst[`INST_REG_1];
+				reg_read2_en = 0;
+				reg_read2_addr = 0; 
+				reg_write_en = 1;
+				reg_write_addr = inst[`INST_REG_2];
+				alu_op = `ALU_OP_ADD;
+				imm = {{16{inst[`INST_SIGN_POS]}},inst[`INST_IMM_POS]}; // zero-extended
+				hi_read_en = 0;
+				lo_read_en = 0;
+				hi_write_en = 0;
+				lo_write_en = 0;
+				returnAddr = 0;
+				pcSet_en = 0; 
+				pcSetValue = 0; 
+			end
+			
+			`OPTICODE_SLTI : 
+			begin
+				reg_read1_en = 1;
+				reg_read1_addr = inst[`INST_REG_1];
+				reg_read2_en = 0;
+				reg_read2_addr = 0; 
+				reg_write_en = 1;
+				reg_write_addr = inst[`INST_REG_2];
+				alu_op = `ALU_OP_SLT;
+				imm = {{16{inst[`INST_SIGN_POS]}},inst[`INST_IMM_POS]}; // zero-extended
+				hi_read_en = 0;
+				lo_read_en = 0;
+				hi_write_en = 0;
+				lo_write_en = 0;
+				returnAddr = 0;
+				pcSet_en = 0; 
+				pcSetValue = 0; 
+			end
+			
+			`OPTICODE_SLTIU : 
+			begin
+				reg_read1_en = 1;
+				reg_read1_addr = inst[`INST_REG_1];
+				reg_read2_en = 0;
+				reg_read2_addr = 0; 
+				reg_write_en = 1;
+				reg_write_addr = inst[`INST_REG_2];
+				alu_op = `ALU_OP_SLTU;
+				imm = {{16{inst[`INST_SIGN_POS]}},inst[`INST_IMM_POS]}; // zero-extended
+				hi_read_en = 0;
+				lo_read_en = 0;
+				hi_write_en = 0;
+				lo_write_en = 0;
+				returnAddr = 0;
+				pcSet_en = 0; 
+				pcSetValue = 0; 
+			end
+			
+			`OPTICODE_SPECIAL2 : 
+			begin
+				case (func)
+		
+					`FUNC_MADD : 
+					begin
+						if (fifteen_eleven == 0 && ten_six == 0)
+						begin
+							reg_read1_en = 1;
+							reg_read2_en = 1;
+							reg_read1_addr = inst[`INST_REG_1];
+							reg_read2_addr = inst[`INST_REG_2]; 
+							reg_write_en = 0;
+							reg_write_addr = 0;
+							alu_op = `ALU_OP_MADD;
+							imm = 0;
+							hi_read_en = 1;
+							lo_read_en = 1;
+							hi_write_en = 1;
+							lo_write_en = 1;
+							returnAddr = 0;
+							pcSet_en = 0; 
+							pcSetValue = 0; 
+						end
+						else
+						begin
+							reg_read1_en = 0;
+							reg_read2_en = 0;
+							reg_read1_addr = 0;
+							reg_read2_addr = 0; 
+							reg_write_en = 0;
+							reg_write_addr = 0;
+							alu_op = 0;
+							imm = 0;
+							hi_read_en = 0;
+							lo_read_en = 0;
+							hi_write_en = 0;
+							lo_write_en = 0;
+							returnAddr = 0;
+							pcSet_en = 0; 
+							pcSetValue = 0; 
+						end			
+					end
+					
+					`FUNC_MADDU : 
+					begin
+						if (fifteen_eleven == 0 && ten_six == 0)
+						begin
+							reg_read1_en = 1;
+							reg_read2_en = 1;
+							reg_read1_addr = inst[`INST_REG_1];
+							reg_read2_addr = inst[`INST_REG_2]; 
+							reg_write_en = 0;
+							reg_write_addr = 0;
+							alu_op = `ALU_OP_MADDU;
+							imm = 0;
+							hi_read_en = 1;
+							lo_read_en = 1;
+							hi_write_en = 1;
+							lo_write_en = 1;
+							returnAddr = 0;
+							pcSet_en = 0; 
+							pcSetValue = 0; 
+						end
+						else
+						begin
+							reg_read1_en = 0;
+							reg_read2_en = 0;
+							reg_read1_addr = 0;
+							reg_read2_addr = 0; 
+							reg_write_en = 0;
+							reg_write_addr = 0;
+							alu_op = 0;
+							imm = 0;
+							hi_read_en = 0;
+							lo_read_en = 0;
+							hi_write_en = 0;
+							lo_write_en = 0;
+							returnAddr = 0;
+							pcSet_en = 0; 
+							pcSetValue = 0; 
+						end			
+					end
+					
+					`FUNC_MSUB : 
+					begin
+						if (fifteen_eleven == 0 && ten_six == 0)
+						begin
+							reg_read1_en = 1;
+							reg_read2_en = 1;
+							reg_read1_addr = inst[`INST_REG_1];
+							reg_read2_addr = inst[`INST_REG_2]; 
+							reg_write_en = 0;
+							reg_write_addr = 0;
+							alu_op = `ALU_OP_MSUB;
+							imm = 0;
+							hi_read_en = 1;
+							lo_read_en = 1;
+							hi_write_en = 1;
+							lo_write_en = 1;
+							returnAddr = 0;
+							pcSet_en = 0; 
+							pcSetValue = 0; 
+						end
+						else
+						begin
+							reg_read1_en = 0;
+							reg_read2_en = 0;
+							reg_read1_addr = 0;
+							reg_read2_addr = 0; 
+							reg_write_en = 0;
+							reg_write_addr = 0;
+							alu_op = 0;
+							imm = 0;
+							hi_read_en = 0;
+							lo_read_en = 0;
+							hi_write_en = 0;
+							lo_write_en = 0;
+							returnAddr = 0;
+							pcSet_en = 0; 
+							pcSetValue = 0; 
+						end			
+					end
+					
+					`FUNC_MSUBU : 
+					begin
+						if (fifteen_eleven == 0 && ten_six == 0)
+						begin
+							reg_read1_en = 1;
+							reg_read2_en = 1;
+							reg_read1_addr = inst[`INST_REG_1];
+							reg_read2_addr = inst[`INST_REG_2]; 
+							reg_write_en = 0;
+							reg_write_addr = 0;
+							alu_op = `ALU_OP_MSUBU;
+							imm = 0;
+							hi_read_en = 1;
+							lo_read_en = 1;
+							hi_write_en = 1;
+							lo_write_en = 1;
+							returnAddr = 0;
+							pcSet_en = 0; 
+							pcSetValue = 0; 
+						end
+						else
+						begin
+							reg_read1_en = 0;
+							reg_read2_en = 0;
+							reg_read1_addr = 0;
+							reg_read2_addr = 0; 
+							reg_write_en = 0;
+							reg_write_addr = 0;
+							alu_op = 0;
+							imm = 0;
+							hi_read_en = 0;
+							lo_read_en = 0;
+							hi_write_en = 0;
+							lo_write_en = 0;
+							returnAddr = 0;
+							pcSet_en = 0; 
+							pcSetValue = 0; 
+						end			
+					end
+	
+					`FUNC_MUL : 
+					begin
+						if (ten_six == 0)
+						begin
+							reg_read1_en = 1;
+							reg_read1_addr = inst[`INST_REG_1];
+							reg_read2_en = 1;
+							reg_read2_addr = inst[`INST_REG_2]; 
+							reg_write_en = 1;
+							reg_write_addr = inst[`INST_REG_3];
+							alu_op = `ALU_OP_MUL;
+							imm = 0;
+							hi_read_en = 0;
+							lo_read_en = 0;
+							hi_write_en = 0;
+							lo_write_en = 0;
+							returnAddr = 0;
+							pcSet_en = 0; 
+							pcSetValue = 0; 
+						end
+						else
+						begin
+							reg_read1_en = 0;
+							reg_read2_en = 0;
+							reg_read1_addr = 0;
+							reg_read2_addr = 0; 
+							reg_write_en = 0;
+							reg_write_addr = 0;
+							alu_op = 0;
+							imm = 0;
+							hi_read_en = 0;
+							lo_read_en = 0;
+							hi_write_en = 0;
+							lo_write_en = 0;
+							returnAddr = 0;
+							pcSet_en = 0; 
+							pcSetValue = 0; 
+						end	
+					end
+	
+					`FUNC_CLZ : 
+					begin
+						if (ten_six == 0)
+						begin
+							reg_read1_en = 1;
+							reg_read1_addr = inst[`INST_REG_1];
+							reg_read2_en = 0;
+							reg_read2_addr = 0; 
+							reg_write_en = 1;
+							reg_write_addr = inst[`INST_REG_3];
+							alu_op = `ALU_OP_CLZ;
+							imm = 0;
+							hi_read_en = 0;
+							lo_read_en = 0;
+							hi_write_en = 0;
+							lo_write_en = 0;
+							returnAddr = 0;
+							pcSet_en = 0; 
+							pcSetValue = 0; 
+						end
+						else
+						begin
+							reg_read1_en = 0;
+							reg_read2_en = 0;
+							reg_read1_addr = 0;
+							reg_read2_addr = 0; 
+							reg_write_en = 0;
+							reg_write_addr = 0;
+							alu_op = 0;
+							imm = 0;
+							hi_read_en = 0;
+							lo_read_en = 0;
+							hi_write_en = 0;
+							lo_write_en = 0;
+							returnAddr = 0;
+							pcSet_en = 0; 
+							pcSetValue = 0; 
+						end
+					end
+					
+					`FUNC_CLO : 
+					begin
+						if (ten_six == 0)
+						begin
+							reg_read1_en = 1;
+							reg_read1_addr = inst[`INST_REG_1];
+							reg_read2_en = 0;
+							reg_read2_addr = 0; 
+							reg_write_en = 1;
+							reg_write_addr = inst[`INST_REG_3];
+							alu_op = `ALU_OP_CLO;
+							imm = 0;
+							hi_read_en = 0;
+							lo_read_en = 0;
+							hi_write_en = 0;
+							lo_write_en = 0;
+							returnAddr = 0;
+							pcSet_en = 0; 
+							pcSetValue = 0; 
+						end
+						else
+						begin
+							reg_read1_en = 0;
+							reg_read2_en = 0;
+							reg_read1_addr = 0;
+							reg_read2_addr = 0; 
+							reg_write_en = 0;
+							reg_write_addr = 0;
+							alu_op = 0;
+							imm = 0;
+							hi_read_en = 0;
+							lo_read_en = 0;
+							hi_write_en = 0;
+							lo_write_en = 0;
+							returnAddr = 0;
+							pcSet_en = 0; 
+							pcSetValue = 0; 
+						end
+					end
+					
+					default : 
+					begin
+						reg_read1_en = 0;
+						reg_read2_en = 0;
+						reg_read1_addr = 0;
+						reg_read2_addr = 0; 
+						reg_write_en = 0;
+						reg_write_addr = 0;
+						alu_op = 0;
+						imm = 0;						
+						hi_read_en = 0;
+						lo_read_en = 0;
+						hi_write_en = 0;							
+						lo_write_en = 0;
+						returnAddr = 0;
+						pcSet_en = 0; 
+						pcSetValue = 0; 
+					end
+					
+				endcase
+			end
+		
+			`OPTICODE_ORI : 
+			begin
+				reg_read1_en = 1;
+				reg_read1_addr = inst[`INST_REG_1];
+				reg_read2_en = 0;
+				reg_read2_addr = 0; 
+				reg_write_en = 1;
+				reg_write_addr = inst[`INST_REG_2];
+				alu_op = `ALU_OP_OR;
+				imm = {16'b0,inst[`INST_IMM_POS]}; // zero-extended
+				hi_read_en = 0;
+				lo_read_en = 0;
+				hi_write_en = 0;
+				lo_write_en = 0;
+				returnAddr = 0;
+				pcSet_en = 0; 
+				pcSetValue = 0; 
+			end
+			
+			`OPTICODE_PREF : 
+			begin
+				reg_read1_en = 0;
+				reg_read2_en = 0;
+				reg_read1_addr = 0;
+				reg_read2_addr = 0; 
+				reg_write_en = 0;
+				reg_write_addr = 0;
+				alu_op = 0;
+				imm = 0;
+				hi_read_en = 0;
+				lo_read_en = 0;
+				hi_write_en = 0;
+				lo_write_en = 0;
+				returnAddr = 0;
+				pcSet_en = 0; 
+				pcSetValue = 0; 
+			end
+			
+			`OPTICODE_ANDI : 
+			begin
+				reg_read1_en = 1;
+				reg_read1_addr = inst[`INST_REG_1];
+				reg_read2_en = 0;
+				reg_read2_addr = 0; 
+				reg_write_en = 1;
+				reg_write_addr = inst[`INST_REG_2];
+				alu_op = `ALU_OP_AND;
+				imm = {16'b0,inst[`INST_IMM_POS]}; // zero-extended
+				hi_read_en = 0;
+				lo_read_en = 0;
+				hi_write_en = 0;
+				lo_write_en = 0;
+				returnAddr = 0;
+				pcSet_en = 0; 
+				pcSetValue = 0; 
+			end
+			
+			`OPTICODE_XORI : 
+			begin
+				reg_read1_en = 1;
+				reg_read1_addr = inst[`INST_REG_1];
+				reg_read2_en = 0;
+				reg_read2_addr = 0; 
+				reg_write_en = 1;
+				reg_write_addr = inst[`INST_REG_2];
+				alu_op = `ALU_OP_XOR;
+				imm = {16'b0,inst[`INST_IMM_POS]}; // zero-extended
+				hi_read_en = 0;
+				lo_read_en = 0;
+				hi_write_en = 0;
+				lo_write_en = 0;
+				returnAddr = 0;
+				pcSet_en = 0; 
+				pcSetValue = 0; 
+			end
+			
+			`OPTICODE_LUI : 
+			begin
+				if (twentyfive_twentyone == 0)
+				begin
+					reg_read1_en = 0;
+					reg_read1_addr = 0;
+					reg_read2_en = 0;
+					reg_read2_addr = 0; 
+					reg_write_en = 1;
+					reg_write_addr = inst[`INST_REG_2];
+					alu_op = `ALU_OP_LUI;
+					imm = {16'b0,inst[`INST_IMM_POS]}; // zero-extended
+					hi_read_en = 0;
+					lo_read_en = 0;
+					hi_write_en = 0;
+					lo_write_en = 0;
+					returnAddr = 0;
+					pcSet_en = 0; 
+					pcSetValue = 0; 
+				end
+				else
+				begin
+					reg_read1_en = 0;
+					reg_read2_en = 0;
+					reg_read1_addr = 0;
+					reg_read2_addr = 0; 
+					reg_write_en = 0;
+					reg_write_addr = 0;
+					alu_op = 0;
+					imm = 0;
+					hi_read_en = 0;
+					lo_read_en = 0;
+					hi_write_en = 0;
+					lo_write_en = 0;
+					returnAddr = 0;
+					pcSet_en = 0; 
+					pcSetValue = 0; 
+				end
+			end
+			
+			`OPTICODE_SPECIAL : 
+			begin
+				case (func)
+				
+					`FUNC_JR : 
+					begin
+						if (twenty_sixteen == 0 && fifteen_eleven == 0 && ten_six == 0)
+						begin
+							reg_read1_en = 1;
+							reg_read2_en = 0;
+							reg_read1_addr = inst[`INST_REG_1];
+							reg_read2_addr = 0; 
+							reg_write_en = 0;
+							reg_write_addr = 0;
+							alu_op = 0;
+							imm = 0;
+							hi_read_en = 0;
+							lo_read_en = 0;
+							hi_write_en = 0;
+							lo_write_en = 0;
+							returnAddr = 0;
+							pcSet_en = 1; 
+							pcSetValue = operand1; 
+						end
+						else
+						begin
+							reg_read1_en = 0;
+							reg_read2_en = 0;
+							reg_read1_addr = 0;
+							reg_read2_addr = 0; 
+							reg_write_en = 0;
+							reg_write_addr = 0;
+							alu_op = 0;
+							imm = 0;
+							hi_read_en = 0;
+							lo_read_en = 0;
+							hi_write_en = 0;
+							lo_write_en = 0;
+							returnAddr = 0;
+							pcSet_en = 0; 
+							pcSetValue = 0; 
+						end
+					end
+					
+					`FUNC_JALR : 
+					begin
+						if (twenty_sixteen == 0 && ten_six == 0)
+						begin
+							reg_read1_en = 1;
+							reg_read2_en = 0;
+							reg_read1_addr = inst[`INST_REG_1];
+							reg_read2_addr = 0; 
+							reg_write_en = 1;
+							reg_write_addr = inst[`INST_REG_3];
+							alu_op = `ALU_OP_RD;
+							imm = 0;
+							hi_read_en = 0;
+							lo_read_en = 0;
+							hi_write_en = 0;
+							lo_write_en = 0;
+							returnAddr = pc_add_4;
+							pcSet_en = 1; 
+							pcSetValue = operand1; 
+						end
+						else
+						begin
+							reg_read1_en = 0;
+							reg_read2_en = 0;
+							reg_read1_addr = 0;
+							reg_read2_addr = 0; 
+							reg_write_en = 0;
+							reg_write_addr = 0;
+							alu_op = 0;
+							imm = 0;
+							hi_read_en = 0;
+							lo_read_en = 0;
+							hi_write_en = 0;
+							lo_write_en = 0;
+							returnAddr = 0;
+							pcSet_en = 0; 
+							pcSetValue = 0; 
+						end
+					end
+				
+					`FUNC_MULT : 
+					begin
+						if (fifteen_eleven == 0 && ten_six == 0)
+						begin
+							reg_read1_en = 1;
+							reg_read2_en = 1;
+							reg_read1_addr = inst[`INST_REG_1];
+							reg_read2_addr = inst[`INST_REG_2]; 
+							reg_write_en = 0;
+							reg_write_addr = 0;
+							alu_op = `ALU_OP_MULT;
+							imm = 0;
+							hi_read_en = 0;
+							lo_read_en = 0;
+							hi_write_en = 1;
+							lo_write_en = 1;
+							returnAddr = 0;
+							pcSet_en = 0; 
+							pcSetValue = 0; 
+						end
+						else
+						begin
+							reg_read1_en = 0;
+							reg_read2_en = 0;
+							reg_read1_addr = 0;
+							reg_read2_addr = 0; 
+							reg_write_en = 0;
+							reg_write_addr = 0;
+							alu_op = 0;
+							imm = 0;
+							hi_read_en = 0;
+							lo_read_en = 0;
+							hi_write_en = 0;
+							lo_write_en = 0;
+							returnAddr = 0;
+							pcSet_en = 0; 
+							pcSetValue = 0; 
+						end
+					end
+					
+					`FUNC_MULTU : 
+					begin
+						if (fifteen_eleven == 0 && ten_six == 0)
+						begin
+							reg_read1_en = 1;
+							reg_read2_en = 1;
+							reg_read1_addr = inst[`INST_REG_1];
+							reg_read2_addr = inst[`INST_REG_2]; 
+							reg_write_en = 0;
+							reg_write_addr = 0;
+							alu_op = `ALU_OP_MULTU;
+							imm = 0;
+							hi_read_en = 0;
+							lo_read_en = 0;
+							hi_write_en = 1;
+							lo_write_en = 1;
+							returnAddr = 0;
+							pcSet_en = 0; 
+							pcSetValue = 0; 
+						end
+						else
+						begin
+							reg_read1_en = 0;
+							reg_read2_en = 0;
+							reg_read1_addr = 0;
+							reg_read2_addr = 0; 
+							reg_write_en = 0;
+							reg_write_addr = 0;
+							alu_op = 0;
+							imm = 0;
+							hi_read_en = 0;
+							lo_read_en = 0;
+							hi_write_en = 0;
+							lo_write_en = 0;
+							returnAddr = 0;
+							pcSet_en = 0; 
+							pcSetValue = 0; 
+						end
+					end
+				
+					`FUNC_ADD : 
+					begin
+						if (ten_six == 0)
+						begin
+							reg_read1_en = 1;
+							reg_read2_en = 1;
+							reg_read1_addr = inst[`INST_REG_1];
+							reg_read2_addr = inst[`INST_REG_2]; 
+							reg_write_en = 1;
+							reg_write_addr = inst[`INST_REG_3];
+							alu_op = `ALU_OP_ADD;
+							imm = 0;
+							hi_read_en = 0;
+							lo_read_en = 0;
+							hi_write_en = 0;
+							lo_write_en = 0;	
+							returnAddr = 0;
+							pcSet_en = 0; 
+							pcSetValue = 0; 							
+						end
+						else
+						begin
+							reg_read1_en = 0;
+							reg_read2_en = 0;
+							reg_read1_addr = 0;
+							reg_read2_addr = 0; 
+							reg_write_en = 0;
+							reg_write_addr = 0;
+							alu_op = 0;
+							imm = 0;
+							hi_read_en = 0;
+							lo_read_en = 0;
+							hi_write_en = 0;
+							lo_write_en = 0;
+							returnAddr = 0;
+							pcSet_en = 0; 
+							pcSetValue = 0; 
+						end
+					end
+					
+					`FUNC_ADDU : 
+					begin
+						if (ten_six == 0)
+						begin
+							reg_read1_en = 1;
+							reg_read2_en = 1;
+							reg_read1_addr = inst[`INST_REG_1];
+							reg_read2_addr = inst[`INST_REG_2]; 
+							reg_write_en = 1;
+							reg_write_addr = inst[`INST_REG_3];
+							alu_op = `ALU_OP_ADDU;
+							imm = 0;
+							hi_read_en = 0;
+							lo_read_en = 0;
+							hi_write_en = 0;
+							lo_write_en = 0;	
+							returnAddr = 0;
+							pcSet_en = 0; 
+							pcSetValue = 0; 							
+						end
+						else
+						begin
+							reg_read1_en = 0;
+							reg_read2_en = 0;
+							reg_read1_addr = 0;
+							reg_read2_addr = 0; 
+							reg_write_en = 0;
+							reg_write_addr = 0;
+							alu_op = 0;
+							imm = 0;
+							hi_read_en = 0;
+							lo_read_en = 0;
+							hi_write_en = 0;
+							lo_write_en = 0;
+							returnAddr = 0;
+							pcSet_en = 0; 
+							pcSetValue = 0; 
+						end	
+					end
+					
+					`FUNC_SUB : 
+					begin
+						if (ten_six == 0)
+						begin
+							reg_read1_en = 1;
+							reg_read2_en = 1;
+							reg_read1_addr = inst[`INST_REG_1];
+							reg_read2_addr = inst[`INST_REG_2]; 
+							reg_write_en = 1;
+							reg_write_addr = inst[`INST_REG_3];
+							alu_op = `ALU_OP_SUB;
+							imm = 0;
+							hi_read_en = 0;
+							lo_read_en = 0;
+							hi_write_en = 0;
+							lo_write_en = 0;	
+							returnAddr = 0;
+							pcSet_en = 0; 
+							pcSetValue = 0; 
+						end
+						else
+						begin
+							reg_read1_en = 0;
+							reg_read2_en = 0;
+							reg_read1_addr = 0;
+							reg_read2_addr = 0; 
+							reg_write_en = 0;
+							reg_write_addr = 0;
+							alu_op = 0;
+							imm = 0;
+							hi_read_en = 0;
+							lo_read_en = 0;
+							hi_write_en = 0;
+							lo_write_en = 0;
+							returnAddr = 0;
+							pcSet_en = 0; 
+							pcSetValue = 0; 
+						end
+					end
+					
+					`FUNC_SUBU : 
+					begin
+						if (ten_six == 0)
+						begin
+							reg_read1_en = 1;
+							reg_read2_en = 1;
+							reg_read1_addr = inst[`INST_REG_1];
+							reg_read2_addr = inst[`INST_REG_2]; 
+							reg_write_en = 1;
+							reg_write_addr = inst[`INST_REG_3];
+							alu_op = `ALU_OP_SUBU;
+							imm = 0;
+							hi_read_en = 0;
+							lo_read_en = 0;
+							hi_write_en = 0;
+							lo_write_en = 0;	
+							returnAddr = 0;
+							pcSet_en = 0; 
+							pcSetValue = 0; 
+						end
+						else
+						begin
+							reg_read1_en = 0;
+							reg_read2_en = 0;
+							reg_read1_addr = 0;
+							reg_read2_addr = 0; 
+							reg_write_en = 0;
+							reg_write_addr = 0;
+							alu_op = 0;
+							imm = 0;
+							hi_read_en = 0;
+							lo_read_en = 0;
+							hi_write_en = 0;
+							lo_write_en = 0;
+							returnAddr = 0;
+							pcSet_en = 0; 
+							pcSetValue = 0; 
+						end
+					end
+					
+					`FUNC_SLT : 
+					begin
+						if (ten_six == 0)
+						begin
+							reg_read1_en = 1;
+							reg_read2_en = 1;
+							reg_read1_addr = inst[`INST_REG_1];
+							reg_read2_addr = inst[`INST_REG_2]; 
+							reg_write_en = 1;
+							reg_write_addr = inst[`INST_REG_3];
+							alu_op = `ALU_OP_SLT;
+							imm = 0;
+							hi_read_en = 0;
+							lo_read_en = 0;
+							hi_write_en = 0;
+							lo_write_en = 0;	
+							returnAddr = 0;
+							pcSet_en = 0; 
+							pcSetValue = 0; 
+						end
+						else
+						begin
+							reg_read1_en = 0;
+							reg_read2_en = 0;
+							reg_read1_addr = 0;
+							reg_read2_addr = 0; 
+							reg_write_en = 0;
+							reg_write_addr = 0;
+							alu_op = 0;
+							imm = 0;
+							hi_read_en = 0;
+							lo_read_en = 0;
+							hi_write_en = 0;
+							lo_write_en = 0;
+							returnAddr = 0;
+							pcSet_en = 0; 
+							pcSetValue = 0; 
+						end
+					end
+					
+					`FUNC_SLTU : 
+					begin
+						if (ten_six == 0)
+						begin
+							reg_read1_en = 1;
+							reg_read2_en = 1;
+							reg_read1_addr = inst[`INST_REG_1];
+							reg_read2_addr = inst[`INST_REG_2]; 
+							reg_write_en = 1;
+							reg_write_addr = inst[`INST_REG_3];
+							alu_op = `ALU_OP_SLTU;
+							imm = 0;
+							hi_read_en = 0;
+							lo_read_en = 0;
+							hi_write_en = 0; 
+							lo_write_en = 0;
+							returnAddr = 0;
+							pcSet_en = 0; 
+							pcSetValue = 0; 
+						end
+						else
+						begin
+							reg_read1_en = 0;
+							reg_read2_en = 0;
+							reg_read1_addr = 0;
+							reg_read2_addr = 0; 
+							reg_write_en = 0;
+							reg_write_addr = 0;
+							alu_op = 0;
+							imm = 0;
+							hi_read_en = 0;
+							lo_read_en = 0;
+							hi_write_en = 0;
+							lo_write_en = 0;
+							returnAddr = 0;
+							pcSet_en = 0; 
+							pcSetValue = 0; 
+						end
+					end
+				
+					`FUNC_AND : 
+					begin
+						if (ten_six == 0)
+						begin
+							reg_read1_en = 1;
+							reg_read1_addr = inst[`INST_REG_1];
+							reg_read2_en = 1;
+							reg_read2_addr = inst[`INST_REG_2]; 
+							reg_write_en = 1;
+							reg_write_addr = inst[`INST_REG_3];
+							alu_op = `ALU_OP_AND;
+							imm = 0;
+							hi_read_en = 0;
+							lo_read_en = 0;
+							hi_write_en = 0;
+							lo_write_en = 0;
+							returnAddr = 0;
+							pcSet_en = 0; 
+							pcSetValue = 0; 
+						end
+						else
+						begin
+							reg_read1_en = 0;
+							reg_read2_en = 0;
+							reg_read1_addr = 0;
+							reg_read2_addr = 0; 
+							reg_write_en = 0;
+							reg_write_addr = 0;
+							alu_op = 0;
+							imm = 0;
+							hi_read_en = 0;
+							lo_read_en = 0;
+							hi_write_en = 0;
+							lo_write_en = 0;
+							returnAddr = 0;
+							pcSet_en = 0; 
+							pcSetValue = 0; 
+						end
+					end
+					
+					`FUNC_OR : 
+					begin
+						if (ten_six == 0)
+						begin
+							reg_read1_en = 1;
+							reg_read1_addr = inst[`INST_REG_1];
+							reg_read2_en = 1;
+							reg_read2_addr = inst[`INST_REG_2]; 
+							reg_write_en = 1;
+							reg_write_addr = inst[`INST_REG_3];
+							alu_op = `ALU_OP_OR;
+							imm = 0;
+							hi_read_en = 0;
+							lo_read_en = 0;
+							hi_write_en = 0;
+							lo_write_en = 0;
+							returnAddr = 0;
+							pcSet_en = 0; 
+							pcSetValue = 0; 
+						end
+						else
+						begin
+							reg_read1_en = 0;
+							reg_read2_en = 0;
+							reg_read1_addr = 0;
+							reg_read2_addr = 0; 
+							reg_write_en = 0;
+							reg_write_addr = 0;
+							alu_op = 0;
+							imm = 0;	
+							hi_read_en = 0;
+							lo_read_en = 0;
+							hi_write_en = 0;
+							lo_write_en = 0;
+							returnAddr = 0;
+							pcSet_en = 0; 
+							pcSetValue = 0; 
+						end
+					end
+					
+					`FUNC_XOR : 
+					begin
+						if (ten_six == 0)
+						begin
+							reg_read1_en = 1;
+							reg_read1_addr = inst[`INST_REG_1];
+							reg_read2_en = 1;
+							reg_read2_addr = inst[`INST_REG_2]; 
+							reg_write_en = 1;
+							reg_write_addr = inst[`INST_REG_3];
+							alu_op = `ALU_OP_XOR;
+							imm = 0;
+							hi_read_en = 0;
+							lo_read_en = 0;
+							hi_write_en = 0;
+							lo_write_en = 0;
+							returnAddr = 0;
+							pcSet_en = 0; 
+							pcSetValue = 0; 
+						end
+						else
+						begin
+							reg_read1_en = 0;
+							reg_read2_en = 0;
+							reg_read1_addr = 0;
+							reg_read2_addr = 0; 
+							reg_write_en = 0;
+							reg_write_addr = 0;
+							alu_op = 0;
+							imm = 0;
+							hi_read_en = 0;
+							lo_read_en = 0;
+							hi_write_en = 0;
+							lo_write_en = 0;
+							returnAddr = 0;
+							pcSet_en = 0; 
+							pcSetValue = 0; 
+						end
+					end
+					
+					`FUNC_NOR : 
+					begin
+						if (ten_six == 0)
+						begin
+							reg_read1_en = 1;
+							reg_read1_addr = inst[`INST_REG_1];
+							reg_read2_en = 1;
+							reg_read2_addr = inst[`INST_REG_2]; 
+							reg_write_en = 1;
+							reg_write_addr = inst[`INST_REG_3];
+							alu_op = `ALU_OP_NOR;
+							imm = 0;
+							hi_read_en = 0;
+							lo_read_en = 0;
+							hi_write_en = 0;
+							lo_write_en = 0;
+							returnAddr = 0;
+							pcSet_en = 0; 
+							pcSetValue = 0; 
+						end
+						else
+						begin
+							reg_read1_en = 0;
+							reg_read2_en = 0;
+							reg_read1_addr = 0;
+							reg_read2_addr = 0; 
+							reg_write_en = 0;
+							reg_write_addr = 0;
+							alu_op = 0;
+							imm = 0;
+							hi_read_en = 0;
+							lo_read_en = 0;
+							hi_write_en = 0;
+							lo_write_en = 0;
+							returnAddr = 0;
+							pcSet_en = 0; 
+							pcSetValue = 0; 
+						end
+					end
+					
+					`FUNC_SLLV : 
+					begin
+						if (ten_six == 0)
+						begin
+							reg_read1_en = 1;
+							reg_read1_addr = inst[`INST_REG_2];
+							reg_read2_en = 1;
+							reg_read2_addr = inst[`INST_REG_1]; 
+							reg_write_en = 1;
+							reg_write_addr = inst[`INST_REG_3];
+							alu_op = `ALU_OP_SLL;
+							imm = 0;
+							hi_read_en = 0;
+							lo_read_en = 0;
+							hi_write_en = 0;
+							lo_write_en = 0;
+							returnAddr = 0;
+							pcSet_en = 0; 
+							pcSetValue = 0; 
+						end
+						else
+						begin
+							reg_read1_en = 0;
+							reg_read2_en = 0;
+							reg_read1_addr = 0;
+							reg_read2_addr = 0; 
+							reg_write_en = 0;
+							reg_write_addr = 0;
+							alu_op = 0;
+							imm = 0;
+							hi_read_en = 0;
+							lo_read_en = 0;
+							hi_write_en = 0;
+							lo_write_en = 0;
+							returnAddr = 0;
+							pcSet_en = 0; 
+							pcSetValue = 0; 
+						end
+					end
+
+					`FUNC_SRLV : 
+					begin
+						if (ten_six == 0)
+						begin
+							reg_read1_en = 1;
+							reg_read1_addr = inst[`INST_REG_2];
+							reg_read2_en = 1;
+							reg_read2_addr = inst[`INST_REG_1]; 
+							reg_write_en = 1;
+							reg_write_addr = inst[`INST_REG_3];
+							alu_op = `ALU_OP_SRL;
+							imm = 0;
+							hi_read_en = 0;
+							lo_read_en = 0;
+							hi_write_en = 0;
+							lo_write_en = 0;
+							returnAddr = 0;
+							pcSet_en = 0; 
+							pcSetValue = 0; 
+						end
+						else
+						begin
+							reg_read1_en = 0;
+							reg_read2_en = 0;
+							reg_read1_addr = 0;
+							reg_read2_addr = 0; 
+							reg_write_en = 0;
+							reg_write_addr = 0;
+							alu_op = 0;
+							imm = 0;
+							hi_read_en = 0;
+							lo_read_en = 0;
+							hi_write_en = 0;
+							lo_write_en = 0;
+							returnAddr = 0;
+							pcSet_en = 0; 
+							pcSetValue = 0; 
+						end
+					end
+					
+					`FUNC_SRAV : 
+					begin
+						if (ten_six == 0)
+						begin
+							reg_read1_en = 1;
+							reg_read1_addr = inst[`INST_REG_2];
+							reg_read2_en = 1;
+							reg_read2_addr = inst[`INST_REG_1]; 
+							reg_write_en = 1;
+							reg_write_addr = inst[`INST_REG_3];
+							alu_op = `ALU_OP_SRA;
+							imm = 0;
+							hi_read_en = 0;
+							lo_read_en = 0;
+							hi_write_en = 0;
+							lo_write_en = 0;
+							returnAddr = 0;
+							pcSet_en = 0; 
+							pcSetValue = 0; 
+						end
+						else
+						begin
+							reg_read1_en = 0;
+							reg_read2_en = 0;
+							reg_read1_addr = 0;
+							reg_read2_addr = 0; 
+							reg_write_en = 0;
+							reg_write_addr = 0;
+							alu_op = 0;
+							imm = 0;
+							hi_read_en = 0;
+							lo_read_en = 0;
+							hi_write_en = 0;
+							lo_write_en = 0;
+							returnAddr = 0;
+							pcSet_en = 0; 
+							pcSetValue = 0; 
+						end
+					end
+					
+					`FUNC_SLL : 
+					begin
+						if (twentyfive_twentyone == 0)
+						begin
+							reg_read1_en = 1;
+							reg_read1_addr = inst[`INST_REG_2];
+							reg_read2_en = 0;
+							reg_read2_addr = 0; 
+							reg_write_en = 1;
+							reg_write_addr = inst[`INST_REG_3];
+							imm = {27'b0, ten_six};
+							alu_op = `ALU_OP_SLL;
+							hi_read_en = 0;
+							lo_read_en = 0;
+							hi_write_en = 0;
+							lo_write_en = 0;
+							returnAddr = 0;
+							pcSet_en = 0; 
+							pcSetValue = 0; 
+						end
+						else
+						begin
+							reg_read1_en = 0;
+							reg_read2_en = 0;
+							reg_read1_addr = 0;
+							reg_read2_addr = 0; 
+							reg_write_en = 0;
+							reg_write_addr = 0;
+							alu_op = 0;
+							imm = 0;
+							hi_read_en = 0;
+							lo_read_en = 0;
+							hi_write_en = 0;
+							lo_write_en = 0;
+							returnAddr = 0;
+							pcSet_en = 0; 
+							pcSetValue = 0; 
+						end
+					end
+					
+					`FUNC_SRL : 
+					begin
+						if (twentyfive_twentyone == 0)
+						begin
+							reg_read1_en = 1;
+							reg_read1_addr = inst[`INST_REG_2];
+							reg_read2_en = 0;
+							reg_read2_addr = 0; 
+							reg_write_en = 1;
+							reg_write_addr = inst[`INST_REG_3];
+							imm = {27'b0, ten_six};
+							alu_op = `ALU_OP_SRL;
+							hi_read_en = 0;
+							lo_read_en = 0;
+							hi_write_en = 0;
+							lo_write_en = 0;
+							returnAddr = 0;
+							pcSet_en = 0; 
+							pcSetValue = 0; 
+						end
+						else
+						begin
+							reg_read1_en = 0;
+							reg_read2_en = 0;
+							reg_read1_addr = 0;
+							reg_read2_addr = 0; 
+							reg_write_en = 0;
+							reg_write_addr = 0;
+							alu_op = 0;
+							imm = 0;				
+							hi_read_en = 0;
+							lo_read_en = 0;
+							hi_write_en = 0;
+							lo_write_en = 0;
+							returnAddr = 0;
+							pcSet_en = 0; 
+							pcSetValue = 0; 
+						end
+					end
+					
+					`FUNC_SRA : 
+					begin
+						if (twentyfive_twentyone == 0)
+						begin
+							reg_read1_en = 1;
+							reg_read1_addr = inst[`INST_REG_2];
+							reg_read2_en = 0;
+							reg_read2_addr = 0; 
+							reg_write_en = 1;
+							reg_write_addr = inst[`INST_REG_3];
+							imm = {27'b0, ten_six};
+							alu_op = `ALU_OP_SRA;				
+							hi_read_en = 0;
+							lo_read_en = 0;
+							hi_write_en = 0;
+							lo_write_en = 0;
+							returnAddr = 0;
+							pcSet_en = 0; 
+							pcSetValue = 0; 
+						end
+						else
+						begin
+							reg_read1_en = 0;
+							reg_read2_en = 0;
+							reg_read1_addr = 0;
+							reg_read2_addr = 0; 
+							reg_write_en = 0;
+							reg_write_addr = 0;
+							alu_op = 0;
+							imm = 0;				
+							hi_read_en = 0;
+							lo_read_en = 0;
+							hi_write_en = 0;
+							lo_write_en = 0;
+							returnAddr = 0;
+							pcSet_en = 0; 
+							pcSetValue = 0; 
+						end
+					end
+					
+					`FUNC_MOVN : 
+					begin
+						if (ten_six == 0)
+						begin
+							reg_read1_en = 1;
+							reg_read1_addr = inst[`INST_REG_1];
+							reg_read2_en = 1;
+							reg_read2_addr = inst[`INST_REG_2]; 
+							reg_write_en = (reg_read2_data !=0 ) ? 1 : 0; // mux
+							reg_write_addr = inst[`INST_REG_3];
+							alu_op = `ALU_OP_MOV;
+							imm = 0;
+							hi_read_en = 0;
+							lo_read_en = 0;
+							hi_write_en = 0;
+							lo_write_en = 0;
+							returnAddr = 0;
+							pcSet_en = 0; 
+							pcSetValue = 0; 
+						end
+						else
+						begin
+							reg_read1_en = 0;
+							reg_read2_en = 0;
+							reg_read1_addr = 0;
+							reg_read2_addr = 0; 
+							reg_write_en = 0;
+							reg_write_addr = 0;
+							alu_op = 0;
+							imm = 0;
+							hi_read_en = 0;
+							lo_read_en = 0;
+							hi_write_en = 0;
+							lo_write_en = 0;
+							returnAddr = 0;
+							pcSet_en = 0; 
+							pcSetValue = 0; 
+						end
+					end
+				
+					`FUNC_MOVZ : 
+					begin
+						if (ten_six == 0)
+						begin
+							reg_read1_en = 1;
+							reg_read1_addr = inst[`INST_REG_1];
+							reg_read2_en = 1;
+							reg_read2_addr = inst[`INST_REG_2]; 
+							reg_write_en = (reg_read2_data ==0 ) ? 1 : 0; // mux
+							reg_write_addr = inst[`INST_REG_3];
+							alu_op = `ALU_OP_MOV;
+							imm = 0;
+							hi_read_en = 0;
+							lo_read_en = 0;
+							hi_write_en = 0;
+							lo_write_en = 0;
+							returnAddr = 0;
+							pcSet_en = 0; 
+							pcSetValue = 0; 
+						end
+						else
+						begin
+							reg_read1_en = 0;
+							reg_read2_en = 0;
+							reg_read1_addr = 0;
+							reg_read2_addr = 0; 
+							reg_write_en = 0;
+							reg_write_addr = 0;
+							alu_op = 0;
+							imm = 0;
+							hi_read_en = 0;
+							lo_read_en = 0;
+							hi_write_en = 0;
+							lo_write_en = 0;
+							returnAddr = 0;
+							pcSet_en = 0; 
+							pcSetValue = 0; 
+						end
+					end
+
+					`FUNC_MFHI : 
+					begin
+						if (twenty_sixteen == 0 && fifteen_eleven && ten_six == 0)
+						begin
+							reg_read1_en = 0;
+							reg_read2_en = 0;
+							reg_read1_addr = 0;
+							reg_read2_addr = 0; 
+							reg_write_en = 1;
+							reg_write_addr = inst[`INST_REG_3];
+							alu_op = `ALU_OP_MF;
+							imm = 0;
+							hi_read_en = 1;
+							lo_read_en = 0;
+							hi_write_en = 0;
+							lo_write_en = 0;
+							returnAddr = 0;
+							pcSet_en = 0; 
+							pcSetValue = 0; 
+						end
+						else
+						begin
+							reg_read1_en = 0;
+							reg_read2_en = 0;
+							reg_read1_addr = 0;
+							reg_read2_addr = 0; 
+							reg_write_en = 0;
+							reg_write_addr = 0;
+							alu_op = 0;
+							imm = 0;
+							hi_read_en = 0;
+							lo_read_en = 0;
+							hi_write_en = 0;
+							lo_write_en = 0;
+							returnAddr = 0;
+							pcSet_en = 0; 
+							pcSetValue = 0; 
+						end
+					end
+					
+					`FUNC_MFLO : 
+					begin
+						if (twentyfive_twentyone == 0 && twenty_sixteen == 0 && ten_six == 0)
+						begin
+							reg_read1_en = 0;
+							reg_read2_en = 0;
+							reg_read1_addr = 0;
+							reg_read2_addr = 0; 
+							reg_write_en = 1;
+							reg_write_addr = inst[`INST_REG_3];
+							alu_op = `ALU_OP_MF;
+							imm = 0;
+							hi_read_en = 0;
+							lo_read_en = 1;
+							hi_write_en = 0;							
+							lo_write_en = 0;
+							returnAddr = 0;
+							pcSet_en = 0; 
+							pcSetValue = 0; 
+						end
+						else
+						begin
+							reg_read1_en = 0;
+							reg_read2_en = 0;
+							reg_read1_addr = 0;
+							reg_read2_addr = 0; 
+							reg_write_en = 0;
+							reg_write_addr = 0;
+							alu_op = 0;
+							imm = 0;
+							hi_read_en = 0;
+							lo_read_en = 0;
+							hi_write_en = 0;							
+							lo_write_en = 0;
+							returnAddr = 0;
+							pcSet_en = 0; 
+							pcSetValue = 0; 
+						end
+					end
+					
+					`FUNC_MTHI : 
+					begin
+						if (twenty_sixteen == 0 && fifteen_eleven == 0 && ten_six == 0)
+						begin
+							reg_read1_en = 1;
+							reg_read2_en = 0;
+							reg_read1_addr = inst[`INST_REG_1];
+							reg_read2_addr = 0; 
+							reg_write_en = 0;
+							reg_write_addr = 0;
+							alu_op = `ALU_OP_MTHI;
+							imm = 0;
+							hi_read_en = 0;
+							lo_read_en = 0;
+							hi_write_en = 1;							
+							lo_write_en = 0;
+							returnAddr = 0;
+							pcSet_en = 0; 
+							pcSetValue = 0; 
+						end
+						else
+						begin
+							reg_read1_en = 0;
+							reg_read2_en = 0;
+							reg_read1_addr = 0;
+							reg_read2_addr = 0; 
+							reg_write_en = 0;
+							reg_write_addr = 0;
+							alu_op = 0;
+							imm = 0;							
+							hi_read_en = 0;
+							lo_read_en = 0;
+							hi_write_en = 1;							
+							lo_write_en = 0;
+							returnAddr = 0;
+							pcSet_en = 0; 
+							pcSetValue = 0; 
+						end
+					end
+					
+					`FUNC_MTLO : 
+					begin
+						if (twenty_sixteen == 0 && fifteen_eleven == 0 && ten_six == 0)
+						begin
+							reg_read1_en = 1;
+							reg_read2_en = 0;
+							reg_read1_addr = inst[`INST_REG_1];
+							reg_read2_addr = 0; 
+							reg_write_en = 0;
+							reg_write_addr = 0;
+							alu_op = `ALU_OP_MTLO;
+							imm = 0;							
+							hi_read_en = 0;
+							lo_read_en = 0;
+							hi_write_en = 0;							
+							lo_write_en = 1;
+							returnAddr = 0;
+							pcSet_en = 0; 
+							pcSetValue = 0; 
+						end
+						else
+						begin
+							reg_read1_en = 0;
+							reg_read2_en = 0;
+							reg_read1_addr = 0;
+							reg_read2_addr = 0; 
+							reg_write_en = 0;
+							reg_write_addr = 0;
+							alu_op = 0;
+							imm = 0;							
+							hi_read_en = 0;
+							lo_read_en = 0;
+							hi_write_en = 0;							
+							lo_write_en = 0;
+							returnAddr = 0;
+							pcSet_en = 0; 
+							pcSetValue = 0; 
+						end
+					end
+					
+					default : 
+					begin
+						reg_read1_en = 0;
+						reg_read2_en = 0;
+						reg_read1_addr = 0;
+						reg_read2_addr = 0; 
+						reg_write_en = 0;
+						reg_write_addr = 0;
+						alu_op = 0;
+						imm = 0;
+						hi_read_en = 0;
+						lo_read_en = 0;
+						hi_write_en = 1;							
+						lo_write_en = 0;
+						returnAddr = 0;
+						pcSet_en = 0; 
+						pcSetValue = 0; 
+					end
+				
+				endcase
+			end
+			
+			default : 
+			begin
+				reg_read1_en = 0;
+				reg_read2_en = 0;
+				reg_read1_addr = 0;
+				reg_read2_addr = 0; 
+				reg_write_en = 0;
+				reg_write_addr = 0;
+				alu_op = 0;
+				imm = 0;						
+				hi_read_en = 0;
+				lo_read_en = 0;
+				hi_write_en = 0;							
+				lo_write_en = 0;
+				returnAddr = 0;
+				pcSet_en = 0; 
+				pcSetValue = 0; 
+			end
+		endcase
+	end
+end
+
+// fetch operand1
+always @(*)
+begin
+	if (rst)
+		operand1 = 0; 
+	else if (reg_read1_en && execute_reg_write_en && execute_reg_write_addr == reg_read1_addr)
+		operand1 = execute_reg_write_data;  // decode-execute RAW
+	else if (lo_read_en && execute_lo_write_en && !is_m_ins) 
+		operand1 = execute_lo_write_data; 	// decode-execute RAW
+	else if (hi_read_en && execute_hi_write_en && !is_m_ins)
+		operand1 = execute_hi_write_data;	// decode-execute RAW
+	else if (reg_read1_en && mem_reg_write_en && mem_reg_write_addr == reg_read1_addr)
+		operand1 = mem_reg_write_data;      // decode-mem RAW 
+	else if (lo_read_en && mem_lo_write_en && !is_m_ins) 
+		operand1 = mem_lo_write_data; 	   // decode-mem RAW
+	else if (hi_read_en && mem_hi_write_en && !is_m_ins)
+		operand1 = mem_hi_write_data;			// decode-mem RAW
+	else if (reg_read1_en)
+		operand1 = reg_read1_data;
+	else if (hi_read_en)
+		operand1 = hi_read_data; 
+	else if (lo_read_en)
+		operand1 = lo_read_data; 
+	else	
+		operand1 = imm;
+end
+
+// fetch operand2
+always @(*)
+begin
+	if (rst)
+		operand2 = 0; 
+	else if (reg_read2_en && execute_reg_write_en && execute_reg_write_addr == reg_read2_addr)
+		operand2 = execute_reg_write_data;  // decode-execute RAW
+	else if (reg_read2_en && mem_reg_write_en && mem_reg_write_addr == reg_read2_addr)
+		operand2 = mem_reg_write_data;      // decode-mem RAW 
+	else if (reg_read2_en)
+		operand2 = reg_read2_data;
+	else
+		operand2 = imm;
+end
+
+endmodule

@@ -1,0 +1,283 @@
+`timescale 1ns / 1ps
+//////////////////////////////////////////////////////////////////////////////////
+// Company: 
+// Engineer: 
+// 
+// Create Date:    21:44:42 04/30/2015 
+// Design Name: 
+// Module Name:    execute 
+// Project Name: 
+// Target Devices: 
+// Tool versions: 
+// Description: 
+//
+// Dependencies: 
+//
+// Revision: 
+// Revision 0.01 - File Created
+// Additional Comments: 
+//
+//////////////////////////////////////////////////////////////////////////////////
+
+`include "defs.v"
+
+module execute(
+	input									rst,
+	input[`INST_OFFSET]				offset,
+	input[`ALU_OP_RANGE]				alu_op,
+	input[`WORD_RANGE]				operand1_i,
+	input[`WORD_RANGE]				operand2_i,
+	input									reg_write_en_in,
+	input[`REG_RANGE]					reg_write_addr_in,
+	input									hi_write_en_in,
+	input 								lo_write_en_in,
+	input[`WORD_RANGE]				returnAddr, 
+	input[`WORD_RANGE]				hi_read_data,
+	input[`WORD_RANGE]				lo_read_data,
+	
+	output								reg_write_en_out,
+	output[`REG_RANGE]				reg_write_addr_out,
+	output reg[`WORD_RANGE]			reg_write_data_out, 
+	output								hi_write_en_out,
+	output								lo_write_en_out,
+	output reg[`WORD_RANGE]			lo_write_data_out,
+	output reg[`WORD_RANGE]			hi_write_data_out,
+	output[`ALU_OP_RANGE]			alu_op_out,
+	output[`WORD_RANGE]				storeValue,
+	output[`ADDR_RANGE]				mem_addr,
+	
+	// mem-execute RAW
+	input									mem_operand_en, 
+	input[`WORD_RANGE]				mem_operand, 
+	input[`REG_RANGE]					mem_operand_addr, 
+	input[`REG_RANGE]					reg_read1_addr,
+	input[`REG_RANGE]					reg_read2_addr,
+	
+	// execute-decode RAW
+	output								decode_reg_write_en,
+	output[`REG_RANGE]				decode_reg_write_addr,
+	output[`WORD_RANGE]				decode_reg_write_data,
+	output								decode_hi_write_en,
+	output								decode_lo_write_en,
+	output[`WORD_RANGE]				decode_lo_write_data,
+	output[`WORD_RANGE]				decode_hi_write_data
+);
+
+// mem-execute RAW
+wire[`WORD_RANGE]						operand1 = (mem_operand_en && mem_operand_addr == reg_read1_addr) 
+															? mem_operand : operand1_i;  
+wire[`WORD_RANGE]						operand2 = (mem_operand_en && mem_operand_addr == reg_read2_addr) 
+															? mem_operand : operand2_i; 
+
+assign									alu_op_out = alu_op; 
+assign									storeValue = operand2;
+assign									mem_addr = operand1 + {{16{offset[15]}}, offset[15 : 0]};
+
+assign 									reg_write_en_out = reg_write_en_in;
+assign 									reg_write_addr_out = reg_write_addr_in;
+assign									hi_write_en_out = hi_write_en_in;
+assign									lo_write_en_out = lo_write_en_in; 
+
+assign 									decode_reg_write_en = reg_write_en_out;
+assign 									decode_reg_write_addr = reg_write_addr_out;
+assign									decode_reg_write_data = reg_write_data_out;
+
+assign									decode_hi_write_en = hi_write_en_out;
+assign									decode_lo_write_en = lo_write_en_out; 
+assign									decode_hi_write_data = hi_write_data_out;
+assign									decode_lo_write_data = lo_write_data_out; 
+
+wire signed[`WORD_RANGE]			signed_operand1 = operand1;
+wire signed[`WORD_RANGE] 			signed_operand2 = operand2;
+wire signed[`OVERFLOW_TEST_RANGE]add_test = signed_operand1 + signed_operand2; 
+wire signed[`OVERFLOW_TEST_RANGE]sub_test = signed_operand1 - signed_operand2; 
+wire signed[`DOUBLE_WORD_RANGE]  mul_test = signed_operand1 * signed_operand2; 
+wire[`DOUBLE_WORD_RANGE]			mulu_test = operand1 * operand2; 
+wire[`DOUBLE_WORD_RANGE]			madd = mul_test + {hi_read_data, lo_read_data};
+wire[`DOUBLE_WORD_RANGE]			maddu = mulu_test + {hi_read_data, lo_read_data};
+wire[`DOUBLE_WORD_RANGE]			msubu = {hi_read_data, lo_read_data} - mulu_test;
+wire[`DOUBLE_WORD_RANGE]			msub = {hi_read_data, lo_read_data} - mul_test;
+
+always @(*)
+begin
+	if (rst)
+		reg_write_data_out <= 0;
+	else
+	begin
+		hi_write_data_out <= 0;
+		lo_write_data_out <= 0;
+		case (alu_op)
+			`ALU_OP_OR : reg_write_data_out <= operand1 | operand2; 
+			`ALU_OP_AND : reg_write_data_out <= operand1 & operand2;
+			`ALU_OP_XOR : reg_write_data_out <= operand1 ^ operand2;
+			`ALU_OP_NOR : reg_write_data_out <= ~(operand1 | operand2); 
+			`ALU_OP_SLL : reg_write_data_out <= operand1 << operand2[4 : 0];			
+			`ALU_OP_SRL : 
+			begin
+				reg_write_data_out <= operand1 >> operand2[4 : 0];
+			end
+			`ALU_OP_SRA : reg_write_data_out <= 
+				(operand1[31]) ? 
+				(32'hFFFF << (32 - operand2[4 : 0]))  | (operand1 >> operand2[4 : 0]) : 
+				(operand1 >> operand2[4 : 0]);   // use mux to calculate Shift Word Right Arithmetic
+			`ALU_OP_LUI : reg_write_data_out <= {operand1[15 : 0], 16'b0}; 
+			`ALU_OP_MOV : reg_write_data_out <= operand1;
+			
+			`ALU_OP_MF : reg_write_data_out <= operand1;			
+			`ALU_OP_MTHI : hi_write_data_out <= operand1; 		
+			`ALU_OP_MTLO : lo_write_data_out <= operand1; 
+			
+			`ALU_OP_MUL : reg_write_data_out <= mul_test[31 : 0];
+			
+			`ALU_OP_MADD : 
+			begin
+				hi_write_data_out <= madd[63 : 32];
+				lo_write_data_out <= madd[31 : 0]; 
+			end 
+			
+			`ALU_OP_MADDU : 
+			begin
+				hi_write_data_out <=	maddu[63 : 32];
+				lo_write_data_out <= maddu[31 : 0]; 
+			end
+			
+			`ALU_OP_MSUB : 
+			begin
+				hi_write_data_out <= msub[63 : 32]; 
+				lo_write_data_out <= msub[31 : 0];
+			end
+			
+			`ALU_OP_MSUBU : 
+			begin
+				hi_write_data_out <= msubu[63 : 32]; 
+				lo_write_data_out <= msubu[31 : 0]; 
+			end
+			
+			`ALU_OP_MULT : 			
+			begin
+				hi_write_data_out <= mul_test[63 : 32];
+				lo_write_data_out <= mul_test[31 : 0];
+			end
+			
+			`ALU_OP_MULTU : 
+			begin
+				hi_write_data_out <= mulu_test[63 : 32];
+				lo_write_data_out <= mulu_test[31 : 0];
+			end
+			
+			`ALU_OP_ADD : 
+			begin
+			 	if (add_test[32] != add_test[31])
+				begin
+					// arithmetic overflow exception
+				end
+				else
+				reg_write_data_out <= add_test[31 : 0]; 
+			end
+			
+			`ALU_OP_ADDU : reg_write_data_out <= operand1 + operand2;
+			
+			`ALU_OP_SUB : 
+			begin
+				if (sub_test[32] != sub_test[31])
+				begin
+					// arithmetic overflow exception
+				end
+				else
+				reg_write_data_out <= sub_test[31 : 0]; 
+			end
+			
+			`ALU_OP_SUBU : reg_write_data_out <= operand1 - operand2; 
+			
+			`ALU_OP_SLT : 
+			begin
+				reg_write_data_out <= (signed_operand1 < signed_operand2) ? 1 : 0;
+			end
+			
+			`ALU_OP_SLTU : 
+			begin
+				reg_write_data_out <= (operand1 < operand2) ? 1 : 0;
+			end
+			
+			`ALU_OP_CLZ : 
+			begin
+				reg_write_data_out <= (operand1[31] ? 0 : 
+											operand1[30] ? 1 : 
+											operand1[29] ? 2 :
+											operand1[28] ? 3 :
+											operand1[27] ? 4 :
+											operand1[26] ? 5 :
+											operand1[25] ? 6 :
+											operand1[24] ? 7 :
+											operand1[23] ? 8 :
+											operand1[22] ? 9 :
+											operand1[21] ? 10 :
+											operand1[20] ? 11 :
+											operand1[19] ? 12 :
+											operand1[18] ? 13 :
+											operand1[17] ? 14 :
+											operand1[16] ? 15 :
+											operand1[15] ? 16 :
+											operand1[14] ? 17 :
+											operand1[13] ? 18 :
+											operand1[12] ? 19 :
+											operand1[11] ? 20 :
+											operand1[10] ? 21 :
+											operand1[9] ? 22 :
+											operand1[8] ? 23 :
+											operand1[7] ? 24 :
+											operand1[6] ? 25 :
+											operand1[5] ? 26 :
+											operand1[4] ? 27 :
+											operand1[3] ? 28 :
+											operand1[2] ? 29 :
+											operand1[1] ? 30 :
+											operand1[0] ? 31 : 32
+											);
+			end
+			
+			`ALU_OP_CLO : 
+			begin
+			reg_write_data_out <= (!operand1[31] ? 0 : 
+											!operand1[30] ? 1 : 
+											!operand1[29] ? 2 :
+											!operand1[28] ? 3 :
+											!operand1[27] ? 4 :
+											!operand1[26] ? 5 :
+											!operand1[25] ? 6 :
+											!operand1[24] ? 7 :
+											!operand1[23] ? 8 :
+											!operand1[22] ? 9 :
+											!operand1[21] ? 10 :
+											!operand1[20] ? 11 :
+											!operand1[19] ? 12 :
+											!operand1[18] ? 13 :
+											!operand1[17] ? 14 :
+											!operand1[16] ? 15 :
+											!operand1[15] ? 16 :
+											!operand1[14] ? 17 :
+											!operand1[13] ? 18 :
+											!operand1[12] ? 19 :
+											!operand1[11] ? 20 :
+											!operand1[10] ? 21 :
+											!operand1[8] ? 23 :
+											!operand1[7] ? 24 :
+											!operand1[6] ? 25 :
+											!operand1[5] ? 26 :
+											!operand1[4] ? 27 :
+											!operand1[3] ? 28 :
+											!operand1[2] ? 29 :
+											!operand1[1] ? 30 :
+											!operand1[0] ? 31 : 32
+											);
+			end
+			
+			`ALU_OP_RD : reg_write_data_out <= returnAddr; 
+			
+			default : ;
+			
+		endcase
+	end
+end
+
+endmodule

@@ -1,0 +1,55 @@
+`timescale 1ns / 1ps
+//////////////////////////////////////////////////////////////////////////////////
+// Company: 
+// Engineer: 
+// 
+// Create Date:    10:44:29 05/12/2015 
+// Design Name: 
+// Module Name:    show 
+// Project Name: 
+// Target Devices: 
+// Tool versions: 
+// Description: 
+//
+// Dependencies: 
+//
+// Revision: 
+// Revision 0.01 - File Created
+// Additional Comments: 
+//
+//////////////////////////////////////////////////////////////////////////////////
+
+`include "defs.v"
+
+module show(
+	input									decode1In,
+	input									decode2In,
+	input[5 : 0]						regAddrIn, 
+	input[`WORD_RANGE]				regValue,
+	input									submit,
+	output[5 : 0]						regAddrOut,
+	output[`LED_RANGE] 				showData
+);
+
+reg										decode1;
+reg										decode2;
+
+initial 
+begin
+	decode1 = 0;
+	decode2 = 0;
+end
+
+assign									regAddrOut = regAddrIn;
+assign									showData = (decode1 == 1 && decode2 == 1) ? regValue[31 : 24] : 
+														  (decode1 == 1 && decode2 == 0) ? regValue[23 : 16] : 
+														  (decode1 == 0 && decode2 == 1) ? regValue[15: 8] : 
+														  regValue[7 : 0]; 
+					
+always @(posedge submit)
+begin
+	decode1 <= decode1In;
+	decode2 <= decode2In; 
+end
+
+endmodule

@@ -1,0 +1,49 @@
+`timescale 1ns / 1ps
+//////////////////////////////////////////////////////////////////////////////////
+// Company: 
+// Engineer: 
+// 
+// Create Date:    20:34:55 04/30/2015 
+// Design Name: 
+// Module Name:    fetch_decode 
+// Project Name: 
+// Target Devices: 
+// Tool versions: 
+// Description: 
+//
+// Dependencies: 
+//
+// Revision: 
+// Revision 0.01 - File Created
+// Additional Comments: 
+//
+//////////////////////////////////////////////////////////////////////////////////
+
+`include "defs.v"
+
+module fetch_decode(
+	input									rst,
+	input									clk,
+	input[`ADDR_RANGE]				fetch_pc,
+	input[`INST_RANGE]				fetch_inst,
+	input									finish, 
+	input									stall, 
+	output reg[`ADDR_RANGE]			decode_pc,
+	output reg[`INST_RANGE]			decode_inst
+);
+
+always @(posedge clk)
+begin
+	if (rst || finish || stall)
+	begin
+		decode_inst <= 0;
+		decode_pc <= 0;
+	end
+	else
+	begin
+		decode_inst <= fetch_inst; 
+		decode_pc <= fetch_pc;
+	end
+end
+
+endmodule

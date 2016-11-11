@@ -1,0 +1,92 @@
+`timescale 1ns / 1ps
+//////////////////////////////////////////////////////////////////////////////////
+// Company: 
+// Engineer: 
+// 
+// Create Date:    21:37:03 04/30/2015 
+// Design Name: 
+// Module Name:    decode_execute 
+// Project Name: 
+// Target Devices: 
+// Tool versions: 
+// Description: 
+//
+// Dependencies: 
+//
+// Revision: 
+// Revision 0.01 - File Created
+// Additional Comments: 
+//
+//////////////////////////////////////////////////////////////////////////////////
+
+`include "defs.v"
+
+module decode_execute(
+	input									clk,
+	input									rst,
+	input									stall, 
+	input[`REG_RANGE]					reg_read1_addr_in,
+	input[`REG_RANGE]					reg_read2_addr_in,
+	input[`WORD_RANGE]				decode_hi_read_data,
+	input[`WORD_RANGE]				decode_lo_read_data,
+	input									decode_hi_write_en,
+	input									decode_lo_write_en,
+	input									decode_reg_write_en,
+	input[`REG_RANGE]					decode_reg_write_addr,
+	input[`WORD_RANGE]				decode_operand1,
+	input[`WORD_RANGE]				decode_operand2,
+	input[`ALU_OP_RANGE]				decode_alu_op,
+	input[`WORD_RANGE]				decode_returnAddr,
+	input[`INST_OFFSET]				decode_offset, 
+	output reg[`INST_OFFSET]		execute_offset,
+	output reg							execute_reg_write_en,
+	output reg[`REG_RANGE]			execute_reg_write_addr,
+	output reg[`WORD_RANGE]			execute_operand1,
+	output reg[`WORD_RANGE]			execute_operand2,
+	output reg[`ALU_OP_RANGE]		execute_alu_op,
+	output reg							execute_hi_write_en,
+	output reg							execute_lo_write_en,
+	output reg[`WORD_RANGE]			execute_returnAddr,
+	output reg[`REG_RANGE]			reg_read2_addr_out,
+	output reg[`REG_RANGE]			reg_read1_addr_out,
+	output reg[`WORD_RANGE]			execute_hi_read_data,
+	output reg[`WORD_RANGE]			execute_lo_read_data
+);
+
+always @(posedge clk)
+begin
+	if (rst || stall)
+	begin
+		execute_reg_write_en <= 0;
+		execute_reg_write_addr <= 0;
+		execute_operand1 <= 0;
+		execute_operand2 <= 0;
+		execute_alu_op <= 0;
+		execute_hi_write_en <= 0;
+		execute_lo_write_en <= 0;
+		execute_returnAddr <= 0; 
+		execute_offset <= 0;
+		reg_read2_addr_out <= 0;
+		reg_read1_addr_out <= 0; 		
+		execute_hi_read_data <= 0;
+		execute_lo_read_data <= 0;
+	end
+	else
+	begin
+		execute_reg_write_en <= decode_reg_write_en;
+		execute_reg_write_addr <= decode_reg_write_addr;
+		execute_operand1 <= decode_operand1;
+		execute_operand2 <= decode_operand2;
+		execute_alu_op <= decode_alu_op;
+		execute_hi_write_en <= decode_hi_write_en;
+		execute_lo_write_en <= decode_lo_write_en;
+		execute_returnAddr <= decode_returnAddr; 
+		execute_offset <= decode_offset;
+		reg_read2_addr_out <= reg_read2_addr_in; 
+		reg_read1_addr_out <= reg_read1_addr_in;
+		execute_hi_read_data <= decode_hi_read_data; 
+		execute_lo_read_data <= decode_lo_read_data; 
+	end
+end
+
+endmodule

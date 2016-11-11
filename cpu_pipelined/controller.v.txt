@@ -1,0 +1,66 @@
+`timescale 1ns / 1ps
+//////////////////////////////////////////////////////////////////////////////////
+// Company: 
+// Engineer: 
+// 
+// Create Date:    15:32:00 05/18/2015 
+// Design Name: 
+// Module Name:    controller 
+// Project Name: 
+// Target Devices: 
+// Tool versions: 
+// Description: 
+//
+// Dependencies: 
+//
+// Revision: 
+// Revision 0.01 - File Created
+// Additional Comments: 
+//
+//////////////////////////////////////////////////////////////////////////////////
+
+`include "defs.v"
+
+module controller(
+	input						decode_is_cond_branch,
+	input[`ALU_OP_RANGE]	execute_alu_op, 
+	input[`REG_RANGE]		decode_reg_addr1,
+	input[`REG_RANGE]		decode_reg_addr2,
+	input[`REG_RANGE]		execute_write_addr,
+
+	output reg 				stall_pc,
+	output reg				stall_fetch_decode, 
+	output reg				stall_decode_execute
+);
+ 
+always @(*)
+begin
+	if (decode_is_cond_branch)
+	begin
+		if (execute_alu_op == `ALU_OP_LB || execute_alu_op == `ALU_OP_LBU || execute_alu_op == `ALU_OP_LH
+		 || execute_alu_op == `ALU_OP_LHU || execute_alu_op == `ALU_OP_LW || execute_alu_op == `ALU_OP_LWL
+		 || execute_alu_op == `ALU_OP_LWR)
+		begin
+			if (decode_reg_addr1 == execute_write_addr || decode_reg_addr2 == execute_write_addr)
+			begin
+				stall_pc = 1;
+				stall_fetch_decode = 1;
+				stall_decode_execute = 1;
+			end
+			else
+			begin
+				stall_pc = 0;
+				stall_fetch_decode = 0;
+				stall_decode_execute = 0;
+			end
+		end
+	end
+	else
+	begin
+		stall_pc = 0;
+		stall_fetch_decode = 0;
+		stall_decode_execute = 0;
+	end
+end
+
+endmodule

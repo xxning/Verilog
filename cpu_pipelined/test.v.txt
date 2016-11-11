@@ -1,0 +1,41 @@
+// Verilog test fixture created from schematic /home/ryd/Git/fpga_based_mips/mips/cpu.sch - Tue May 12 15:45:15 2015
+
+`timescale 1ns / 1ps
+
+module cpu_cpu_sch_tb();
+
+// Inputs
+   reg rst;
+   reg clk;
+   reg [5:0] regAddrIn;
+   reg decode2In;
+   reg decode1In;
+   reg submit;
+
+// Output
+   wire [7:0] showData;
+
+// Bidirs
+
+// Instantiate the UUT
+   cpu UUT (
+		.rst(rst), 
+		.showData(showData), 
+		.clk(clk), 
+		.regAddrIn(regAddrIn), 
+		.decode2In(decode2In), 
+		.decode1In(decode1In), 
+		.submit(submit)
+   );
+	
+initial begin
+	clk = 0;
+	rst = 0; 
+	regAddrIn = 0;
+	decode1In = 0;
+	decode2In = 0;
+	submit = 0;
+	forever begin #50; clk = ~clk; end
+end
+
+endmodule

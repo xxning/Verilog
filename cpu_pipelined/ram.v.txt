@@ -1,0 +1,108 @@
+`timescale 1ns / 1ps
+//////////////////////////////////////////////////////////////////////////////////
+// Company: 
+// Engineer: 
+// 
+// Create Date:    09:28:48 05/13/2015 
+// Design Name: 
+// Module Name:    ram 
+// Project Name: 
+// Target Devices: 
+// Tool versions: 
+// Description: 
+//
+// Dependencies: 
+//
+// Revision: 
+// Revision 0.01 - File Created
+// Additional Comments: 
+//
+//////////////////////////////////////////////////////////////////////////////////
+
+`include "defs.v"
+
+module ram(
+	input									clk,
+	input									we,
+	input[`ADDR_RANGE]				addr,
+	input[`WORD_RANGE]				dataIn,
+	input[`IP_CORE_RAM_SEL_RANGE]	sel,
+	output reg[`WORD_RANGE]			dataOut
+);
+
+wire[`IP_CORE_RAM_ADDR_RANGE]		a = addr[`IP_CORE_RAM_ACTUAL_ADDR_RANGE]; 
+
+wire[`IP_CORE_RAM_DATA_RANGE] 	d0 = dataIn[7 : 0];
+wire[`IP_CORE_RAM_DATA_RANGE]		d1 = dataIn[15 : 8];
+wire[`IP_CORE_RAM_DATA_RANGE]		d2 = dataIn[23 : 16];
+wire[`IP_CORE_RAM_DATA_RANGE]		d3 = dataIn[31 : 24];
+
+reg 										we0; 
+reg										we1; 
+reg										we2; 
+reg										we3; 
+
+wire[`IP_CORE_RAM_DATA_RANGE]		spo0;
+wire[`IP_CORE_RAM_DATA_RANGE]		spo1;
+wire[`IP_CORE_RAM_DATA_RANGE]		spo2;
+wire[`IP_CORE_RAM_DATA_RANGE]		spo3;
+
+ramChip ramChip3 (
+  .a(a),
+  .d(d3), 
+  .clk(~clk), 
+  .we(we3), 
+  .spo(spo3) 
+); 
+
+ramChip ramChip2 (
+  .a(a),
+  .d(d2), 
+  .clk(~clk), 
+  .we(we2), 
+  .spo(spo2) 
+); 
+
+ramChip ramChip1 (
+  .a(a),
+  .d(d1), 
+  .clk(~clk), 
+  .we(we1), 
+  .spo(spo1) 
+); 
+
+ramChip ramChip0 (
+  .a(a),
+  .d(d0), 
+  .clk(~clk), 
+  .we(we0), 
+  .spo(spo0) 
+); 
+
+always @(*)
+begin
+	if (we)
+	begin
+		we3 <= sel[3]; 
+		we2 <= sel[2];
+		we1 <= sel[1];
+		we0 <= sel[0]; 
+	end
+	else
+	begin
+		we0 <= 0;
+		we1 <= 0;
+		we2 <= 0;
+		we3 <= 0;
+	end
+end
+
+always @(*)
+begin
+	if (we)
+		dataOut <= 0; 
+	else
+		dataOut <= {spo3, spo2, spo1, spo0};
+end
+
+endmodule
